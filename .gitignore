@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment
+.env
+.venv/
+env/
+venv/
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# Logs
+backend/data/logs/
+*.log
+
+# Memory store
+backend/data/memory/kv/
+
+# Uploads
+backend/data/uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Claude settings (local)
+.claude/settings.local.json
+
+# Compiled
+*.so
+*.dylib
+
+# Qoder repowiki (auto-generated)
+.qoder/repowiki/
