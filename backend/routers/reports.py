@@ -2,6 +2,7 @@
 
 import json
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -57,14 +58,22 @@ async def get_reports(
     query = query.order_by(Report.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     reports = (await db.execute(query)).scalars().all()
 
+    items = []
+    for r in reports:
+        # 从 chart_config JSON 数组计算图表数量
+        chart_count = 0
+        if r.chart_config:
+            try:
+                chart_count = len(json.loads(r.chart_config))
+            except (json.JSONDecodeError, TypeError):
+                chart_count = 0
+        items.append({
+            'id': r.id, 'title': r.title, 'report_type': r.report_type,
+            'created_at': r.created_at, 'chart_count': chart_count,
+        })
+
     return {
-        'items': [
-            {
-                'id': r.id, 'title': r.title, 'report_type': r.report_type,
-                'created_at': r.created_at,
-            }
-            for r in reports
-        ],
+        'items': items,
         'total': total,
         'page': page,
         'page_size': page_size,
@@ -112,30 +121,37 @@ async def export_report_html(
     db: AsyncSession = Depends(get_db),
 ):
     """导出 HTML 报告。"""
-    result = await db.execute(select(Report).where(Report.id == report_id))
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="报表不存在")
-    if report.user_id != user.id and user.role != "admin":
-        raise HTTPException(status_code=403, detail="无权导出")
+    try:
+        result = await db.execute(select(Report).where(Report.id == report_id))
+        report = result.scalar_one_or_none()
+        if not report:
+            raise HTTPException(status_code=404, detail="报表不存在")
+        if report.user_id != user.id and user.role != "admin":
+            raise HTTPException(status_code=403, detail="无权导出")
 
-    charts = json.loads(report.chart_config or '[]')
-    insights = json.loads(report.insights or '[]')
-    data_table = json.loads(report.data_payload or '{}')
-    kpis = get_processor().get_summary_kpis()
+        charts = json.loads(report.chart_config or '[]')
+        insights = json.loads(report.insights or '[]')
+        data_table = json.loads(report.data_payload or '{}')
+        proc = get_processor()
+        kpis = proc.get_summary_kpis() if proc else {'total': 0}
 
-    html_bytes = export_html(
-        title=report.title or '报表',
-        charts=charts,
-        insights=insights,
-        data_table=data_table,
-        total=kpis['total'],
-    )
-    return Response(
-        content=html_bytes,
-        media_type="text/html; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{report.title or "report"}.html"'},
-    )
+        html_bytes = export_html(
+            title=report.title or '报表',
+            charts=charts,
+            insights=insights,
+            data_table=data_table,
+            total=kpis.get('total', 0),
+        )
+        filename = quote(report.title or 'report', safe='')
+        return Response(
+            content=html_bytes,
+            media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}.html"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'HTML 导出失败: {e}')
 
 
 @router.get("/{report_id}/export/excel")
@@ -145,25 +161,36 @@ async def export_report_excel(
     db: AsyncSession = Depends(get_db),
 ):
     """导出 Excel 报告。"""
-    result = await db.execute(select(Report).where(Report.id == report_id))
-    report = result.scalar_one_or_none()
-    if not report:
-        raise HTTPException(status_code=404, detail="报表不存在")
-    if report.user_id != user.id and user.role != "admin":
-        raise HTTPException(status_code=403, detail="无权导出")
+    try:
+        result = await db.execute(select(Report).where(Report.id == report_id))
+        report = result.scalar_one_or_none()
+        if not report:
+            raise HTTPException(status_code=404, detail="报表不存在")
+        if report.user_id != user.id and user.role != "admin":
+            raise HTTPException(status_code=403, detail="无权导出")
 
-    data_table = json.loads(report.data_payload or '{}')
-    insights = json.loads(report.insights or '[]')
-    kpis = get_processor().get_summary_kpis()
+        data_table = json.loads(report.data_payload or '{}')
+        insights = json.loads(report.insights or '[]')
+        proc = get_processor()
+        kpis = proc.get_summary_kpis() if proc else {
+            'total': 0, 'product_line_count': 0, 'unknown_count': 0,
+            'unknown_ratio': 0, 'top_defect': 'N/A', 'top_defect_count': 0,
+            'key_customer_count': 0, 'key_customer_ratio': 0,
+        }
 
-    excel_bytes = export_excel(
-        title=report.title or '报表',
-        data_table=data_table,
-        kpis=kpis,
-        insights=insights,
-    )
-    return Response(
-        content=excel_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{report.title or "report"}.xlsx"'},
-    )
+        excel_bytes = export_excel(
+            title=report.title or '报表',
+            data_table=data_table,
+            kpis=kpis,
+            insights=insights,
+        )
+        filename = quote(report.title or 'report', safe='')
+        return Response(
+            content=excel_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}.xlsx"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Excel 导出失败: {e}')

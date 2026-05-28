@@ -146,7 +146,10 @@ async function exportExcel(id) {
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  return new Date(dateStr).toLocaleString('zh-CN', {
+  // SQLite CURRENT_TIMESTAMP 返回 UTC 时间但无时区标记，需追加 'Z' 让 JS 按 UTC 解析后转本地时间
+  const str = String(dateStr)
+  const normalized = /[Zz]|[+-]\d{2}:?\d{2}$/.test(str) ? str : str + 'Z'
+  return new Date(normalized).toLocaleString('zh-CN', {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit'
   })

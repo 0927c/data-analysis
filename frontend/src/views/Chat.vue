@@ -254,10 +254,25 @@ const currentDate = computed(() => {
 onMounted(async () => {
   await chatStore.fetchSessions()
   await analyticsStore.fetchSummary()
+  // 恢复上次对话的会话
+  const lastSessionId = localStorage.getItem('lastSessionId')
+  if (lastSessionId) {
+    const sid = parseInt(lastSessionId, 10)
+    const exists = chatStore.sessions.some(s => s.id === sid)
+    if (exists) {
+      chatStore.currentSessionId = sid
+      await chatStore.fetchMessages(sid)
+      await nextTick()
+      scrollToBottom()
+    } else {
+      localStorage.removeItem('lastSessionId')
+    }
+  }
 })
 
 async function loadSession(sessionId) {
   chatStore.currentSessionId = sessionId
+  localStorage.setItem('lastSessionId', String(sessionId))
   await chatStore.fetchMessages(sessionId)
   scrollToBottom()
 }
@@ -266,6 +281,7 @@ function startNewChat() {
   chatStore.currentSessionId = null
   chatStore.messages = []
   inputText.value = ''
+  localStorage.removeItem('lastSessionId')
 }
 
 async function handleSend() {
@@ -281,9 +297,11 @@ async function handleSend() {
     chatStore.messages.push({ role: 'user', content: `[上传文件] ${file.name}\n${displayText}`, created_at: new Date().toISOString() })
     clearFile()
     try {
+      const wasNewSession = !chatStore.currentSessionId
       const data = await chatStore.sendWithFile(file, displayText, chatStore.currentSessionId)
-      if (!chatStore.currentSessionId) {
+      if (wasNewSession && data.session_id) {
         chatStore.currentSessionId = data.session_id
+        localStorage.setItem('lastSessionId', String(data.session_id))
         await chatStore.fetchSessions()
       }
       await nextTick()
@@ -305,8 +323,11 @@ async function handleSend() {
   chatStore.messages.push({ role: 'user', content: text, created_at: new Date().toISOString() })
 
   try {
+    const wasNewSession = !chatStore.currentSessionId
     const data = await chatStore.sendMessage(text, chatStore.currentSessionId)
-    if (!chatStore.currentSessionId && data.report_id) {
+    if (wasNewSession && data.session_id) {
+      chatStore.currentSessionId = data.session_id
+      localStorage.setItem('lastSessionId', String(data.session_id))
       await chatStore.fetchSessions()
     }
     await nextTick()

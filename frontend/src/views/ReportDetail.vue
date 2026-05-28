@@ -56,9 +56,17 @@
 
       <!-- Insights tab -->
       <section v-show="activeTab === 'insights'" v-if="report.insights?.length" class="insights-section">
-        <div v-for="(insight, i) in report.insights" :key="i" class="insight-item" :style="{ animationDelay: (i * 80) + 'ms' }">
-          <span class="insight-icon">&#x1F4A1;</span>
-          <span>{{ insight }}</span>
+        <div v-for="(insight, i) in report.insights" :key="i" class="insight-item" :class="'severity-' + (typeof insight === 'object' ? insight.severity : 'info')" :style="{ animationDelay: (i * 80) + 'ms' }">
+          <span class="insight-severity-dot"></span>
+          <div class="insight-content">
+            <div class="insight-header">
+              <span class="severity-badge" :class="typeof insight === 'object' ? insight.severity : 'info'">
+                {{ severityLabel(typeof insight === 'object' ? insight.severity : 'info') }}
+              </span>
+              <span class="insight-title">{{ typeof insight === 'object' ? insight.title : String(insight) }}</span>
+            </div>
+            <p v-if="typeof insight === 'object' && insight.desc" class="insight-desc">{{ insight.desc }}</p>
+          </div>
         </div>
       </section>
 
@@ -170,6 +178,11 @@ onMounted(async () => {
 function parseJSON(str, fallback) {
   if (!str) return fallback
   try { return JSON.parse(str) } catch { return fallback }
+}
+
+function severityLabel(sev) {
+  const map = { critical: '严重', warning: '警告', info: '提示' }
+  return map[sev] || sev || '提示'
 }
 
 async function doExportHtml() {
@@ -363,17 +376,87 @@ async function doExportExcel() {
   display: flex;
   align-items: flex-start;
   gap: var(--space-md);
-  background: rgba(0, 212, 255, 0.04);
-  border-left: 3px solid var(--accent);
   padding: var(--space-md) var(--space-lg);
   margin-bottom: var(--space-sm);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   animation: insightSlideIn var(--transition-slow) var(--ease-out) both;
+  background: rgba(0, 212, 255, 0.04);
+  border: 1px solid var(--card-border);
+  transition: border-color var(--transition-base);
 }
 
-.insight-icon {
+.insight-item:hover {
+  border-color: var(--accent);
+}
+
+.insight-item.severity-critical {
+  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.insight-item.severity-warning {
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.insight-item.severity-info {
+  border-left: 3px solid var(--accent);
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.insight-severity-dot {
+  display: none;
+}
+
+.insight-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.insight-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.severity-badge {
+  display: inline-block;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
   flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.severity-badge.critical {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.severity-badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+}
+
+.severity-badge.info {
+  background: rgba(0, 212, 255, 0.12);
+  color: var(--accent);
+}
+
+.insight-title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.insight-desc {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 @keyframes insightSlideIn {

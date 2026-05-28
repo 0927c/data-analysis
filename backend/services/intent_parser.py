@@ -87,7 +87,9 @@ class IntentParser:
 注意:
 - 如果用户要查看数据的分布、排名、对比等，skill_id 设为 "complaint_analysis"，action 设为 "query"
 - 如果用户问题与客诉数据无关（如闲聊、问天气、问知识等），skill_id 设为 "chitchat"，action 设为 "chitchat"
-- **如果用户在询问数据背后的原因、解释分析结果、问"为什么"、"怎么分析出来的"、"如何得出"等问题，skill_id 设为 "chitchat"，action 设为 "chitchat"**（这类解释性问题需要 AI 结合数据上下文回答，不是简单出图表）
+- **如果用户在询问数据背后的原因、解释分析结果、问“为什么”、“怎么分析出来的”、“如何得出”等问题，skill_id 设为 "chitchat"，action 设为 "chitchat"**（这类解释性问题需要 AI 结合数据上下文回答，不是简单出图表）
+- **如果用户在询问具体数量、数字答案（如“XX有多少件”、“XX是多少”、“XX有几个”），skill_id 设为 "chitchat"，action 设为 "chitchat"**（这类简单数据查询用文字直接回答，不需要生成报表图表）
+- **如果用户提到具体的不良类型名称（如“颜色波动”、“标签贴错”、“黑点”等）并询问数量、分布、原因，skill_id 设为 "chitchat"，action 设为 "chitchat"**（具体不良类型的问答由 AI 结合数据上下文回答更全面）
 - 如果用户提到具体产品线（如 APP），在 filters 中设置 product_line
 - 如果用户说"所有产品线"或不指定，filters 中不包含 product_line（用上下文中已有的）
 - 如果用户说"只看XX"或"排除XX"，更新对应 filter
@@ -171,12 +173,18 @@ class IntentParser:
 
     # 闲聊/数据问答检测
         # "为什么/怎么/如何/解释" + 数据关键词 = 数据问答，走 chitchat（带数据上下文）
-        explain_keywords = ['为什么', '怎么', '如何', '解释', '为什么', '凭什么', '根据什么', '分析出']
+        explain_keywords = ['为什么', '怎么', '如何', '解释', '为什么', '凭什么', '根据什么', '分析出',
+                           '多少件', '多少个', '有几件', '有几个', '是多少', '有多少']
         is_explain_question = any(kw in msg for kw in explain_keywords)
         complaint_keywords = ['投诉', '客诉', '产品线', '不良', '原因', '缺陷', '客户', '制造', '研发', '仓储', '分析', '报表', '排名', '占比', '分布', 'TOP', 'top', '交叉', '对比', '大客户']
         is_complaint = any(kw in msg for kw in complaint_keywords)
 
-        if is_explain_question and is_complaint:
+        # 具体不良类型名称 → 直接走 chitchat（数量查询/分布问答由AI文字回答）
+        defect_names = ['颜色波动', '标签贴错', '黑点', '色差', '外观', '性能不达标', '重量不达标',
+                        '混色不均', '配色不均', '杂质', '缩水', '变形', '气泡', '划痕']
+        has_defect_name = any(name in msg for name in defect_names)
+
+        if (is_explain_question and is_complaint) or has_defect_name:
             # 数据解释类问题 → chitchat（带数据上下文让 LLM 回答）
             return {
                 'skill_id': 'chitchat',

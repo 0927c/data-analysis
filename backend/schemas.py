@@ -40,6 +40,7 @@ class ChartData(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str
+    session_id: Optional[int] = None
     charts: list[ChartData] = []
     insights: list[str] = []
     data_table: Optional[dict] = None

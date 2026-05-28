@@ -54,8 +54,9 @@ export const useChatStore = defineStore('chat', {
       this.loading = true
       try {
         const { data } = await apiClient.post('/chat', { message, session_id: sessionId })
-        if (!this.currentSessionId && data.report_id) {
-          this.currentSessionId = sessionId // will be set by chat view
+        // 新会话时从响应中获取 session_id
+        if (!this.currentSessionId && data.session_id) {
+          this.currentSessionId = data.session_id
         }
         // 用户消息已由 Chat.vue 添加，这里只添加 AI 响应
         this.messages.push({
@@ -152,6 +153,11 @@ export const useReportStore = defineStore('report', {
       try {
         const response = await apiClient.get(`/reports/${id}/export/html`, { responseType: 'blob' })
         this.exportProgress = 80
+        // 检查是否返回了错误 JSON（而非 HTML blob）
+        if (response.data.type === 'application/json') {
+          const errText = await response.data.text()
+          throw new Error(JSON.parse(errText).detail || '导出失败')
+        }
         const blob = new Blob([response.data], { type: 'text/html' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -160,6 +166,8 @@ export const useReportStore = defineStore('report', {
         a.click()
         URL.revokeObjectURL(url)
         this.exportProgress = 100
+      } catch (err) {
+        alert('导出 HTML 失败：' + (err.message || '未知错误'))
       } finally {
         this.isExporting = false
         setTimeout(() => { this.exportProgress = 0 }, 500)
@@ -172,6 +180,10 @@ export const useReportStore = defineStore('report', {
       try {
         const response = await apiClient.get(`/reports/${id}/export/excel`, { responseType: 'blob' })
         this.exportProgress = 80
+        if (response.data.type === 'application/json') {
+          const errText = await response.data.text()
+          throw new Error(JSON.parse(errText).detail || '导出失败')
+        }
         const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -180,6 +192,8 @@ export const useReportStore = defineStore('report', {
         a.click()
         URL.revokeObjectURL(url)
         this.exportProgress = 100
+      } catch (err) {
+        alert('导出 Excel 失败：' + (err.message || '未知错误'))
       } finally {
         this.isExporting = false
         setTimeout(() => { this.exportProgress = 0 }, 500)

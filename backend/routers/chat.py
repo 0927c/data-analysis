@@ -88,6 +88,7 @@ async def chat(
     # 保存用户消息
     user_msg = Message(session_id=session_id, role="user", content=req.message)
     db.add(user_msg)
+    await db.flush()  # 确保当前消息拿到ID，后续查询可排除
 
     # 加载上下文
     cm.load_state(session_id, session.context_state)
@@ -105,15 +106,27 @@ async def chat(
         ctx = cm.update_context(session_id, intent['filters'])
 
     # 执行 skill
-    # chitchat 需要原始消息
+    # chitchat 需要原始消息和历史对话
     intent['message'] = req.message
+    # 加载最近对话历史（最多取6条 = 3轮对话，排除当前消息）
+    history_result = await db.execute(
+        select(Message)
+        .where(Message.session_id == session_id, Message.id < user_msg.id)
+        .order_by(Message.id.desc())
+        .limit(6)
+    )
+    recent_msgs = list(reversed(history_result.scalars().all()))
+    intent['chat_history'] = [
+        {'role': m.role, 'content': m.content}
+        for m in recent_msgs if m.content
+    ]
     try:
         result = await se.execute_skill(intent.get('skill_id', 'complaint_analysis'), intent)
     except ValueError as e:
         agent_msg = Message(session_id=session_id, role="assistant", content=str(e))
         db.add(agent_msg)
         await db.commit()
-        return ChatResponse(message=str(e))
+        return ChatResponse(message=str(e), session_id=session_id)
 
     # 闲聊分支：不需要生成报表
     is_chitchat = intent.get('action') == 'chitchat' or intent.get('skill_id') == 'chitchat'
@@ -129,7 +142,7 @@ async def chat(
         session.context_state = cm.save_state(session_id)
         session.updated_at = datetime.now(timezone.utc)
         await db.commit()
-        return ChatResponse(message=agent_content)
+        return ChatResponse(message=agent_content, session_id=session_id)
 
     # 投诉分析分支：生成报表
     report_data = assemble_report(
@@ -179,6 +192,7 @@ async def chat(
 
     return ChatResponse(
         message=agent_content,
+        session_id=session_id,
         charts=charts,
         insights=convert_numpy([i.get('title', '') for i in result.get('insights', [])]),
         data_table=convert_numpy(result.get('data_table')),
@@ -393,6 +407,7 @@ async def chat_with_upload(
 
     return ChatResponse(
         message=agent_content,
+        session_id=session_id,
         charts=chart_data,
         insights=convert_numpy([i.get('title', '') for i in result.get('insights', [])]),
         data_table=convert_numpy(result.get('data_table')),

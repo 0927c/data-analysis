@@ -1,4 +1,4 @@
----
+![alt text](image.png)---
 id: report_export
 name: 报告导出
 description: 将分析结果和图表组装为报告，支持 HTML 和 Excel 格式导出
