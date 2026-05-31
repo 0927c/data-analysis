@@ -20,6 +20,7 @@ class OpenAIProvider(LLMProvider):
             kwargs['base_url'] = base_url
         if api_key:
             kwargs['api_key'] = api_key
+            kwargs['default_headers'] = {"api-key": api_key}
         self.client = AsyncOpenAI(**kwargs)
 
     async def chat_completion(

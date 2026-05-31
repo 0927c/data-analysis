@@ -47,34 +47,36 @@
           <h2 class="greeting-text">{{ greeting }}，{{ displayName }}</h2>
           <p class="greeting-date">{{ currentDate }}</p>
         </div>
-        <p class="greeting-sub">我可以帮你分析客诉数据，生成可视化报表</p>
+        <p class="greeting-sub">我可以帮你分析工单数据，生成可视化报表</p>
 
         <!-- Quick stats -->
         <div v-if="analyticsStore.summary" class="quick-stats">
           <KPICard
             :value="analyticsStore.summary.total || 0"
-            label="总投诉数"
+            label="总工单数"
             color="var(--accent)"
           />
           <KPICard
-            :value="analyticsStore.summary.unknown_ratio || 0"
-            label="原因不明占比"
+            :value="analyticsStore.summary.sla_ratio || 0"
+            label="SLA 达标率"
             color="var(--accent3)"
-            :trend="analyticsStore.summary.unknown_trend || null"
+            suffix="%"
           />
           <KPICard
-            :value="analyticsStore.summary.product_line_count || 0"
-            label="产品线数"
+            :value="analyticsStore.summary.avg_resolution_days || 0"
+            label="平均解决天数"
             color="var(--accent4)"
           />
         </div>
 
         <!-- Quick questions -->
         <div class="quick-questions">
-          <button @click="askQuestion('各产品线投诉量排名是怎样的？')">各产品线投诉量排名</button>
-          <button @click="askQuestion('制造原因中排名前三的问题是什么？')">制造原因 TOP3</button>
-          <button @click="askQuestion('大客户投诉情况如何？')">大客户投诉情况</button>
-          <button @click="askQuestion('原因不明的投诉有多少？占比多少？')">原因不明占比</button>
+          <button @click="askQuestion('各状态工单分布是怎样的？')">工单状态分布</button>
+          <button @click="askQuestion('哪些故障原因在重复出现？')">重复故障挖掘</button>
+          <button @click="askQuestion('故障根因 TOP10 排名')">故障根因排名</button>
+          <button @click="askQuestion('运维质量指标：退回率、挂起率、SLA')">运维质量指标</button>
+          <button @click="askQuestion('最近几周的工单趋势如何？')">工单周趋势</button>
+          <button @click="askQuestion('哪个服务组的工单最多？')">服务组工作量</button>
         </div>
       </div>
 

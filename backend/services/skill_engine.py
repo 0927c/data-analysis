@@ -1,28 +1,25 @@
-"""Skill 执行引擎：注册、分发、执行报表分析技能。"""
+"""Skill 执行引擎：注册、分发、执行工单分析技能。"""
 
 import json
 import os
 import re
 from typing import Callable, Optional
 
-from backend.services.complaint_processor import ComplaintProcessor
+from backend.services.ticket_processor import TicketProcessor
 from backend.services.chart_renderer import (
-    render_pie, render_bar, render_stacked_bar, render_horizontal_bar, render_rose,
+    render_pie, render_bar, render_stacked_bar, render_horizontal_bar, render_rose, render_line,
 )
 
-# harness/skills/ 目录路径
 SKILLS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'harness', 'skills')
 
 
 def _parse_skill_md(filepath: str) -> Optional[dict]:
-    """解析 SKILL.md 的 YAML frontmatter，返回元数据字典。"""
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
     except OSError:
         return None
 
-    # 提取 --- ... --- 之间的 frontmatter
     m = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
     if not m:
         return None
@@ -34,7 +31,6 @@ def _parse_skill_md(filepath: str) -> Optional[dict]:
             key, _, val = line.partition(':')
             key = key.strip()
             val = val.strip()
-            # 只取顶层简单字段，嵌套结构忽略
             if val and key in ('id', 'name', 'description', 'category', 'enabled', 'priority'):
                 if val.lower() == 'true':
                     val = True
@@ -47,27 +43,22 @@ def _parse_skill_md(filepath: str) -> Optional[dict]:
 
 
 class SkillEngine:
-    """Skill 注册与执行分发器。"""
 
-    def __init__(self, processor: ComplaintProcessor, llm_provider=None):
+    def __init__(self, processor: TicketProcessor, llm_provider=None):
         self.processor = processor
         self.llm = llm_provider
         self._skills: dict[str, dict] = {}
         self._handlers: dict[str, Callable] = {
-            'complaint_analysis': self._handle_complaint_analysis,
+            'ticket_analysis': self._handle_ticket_analysis,
             'data_query': self._handle_data_query,
             'report_export': self._handle_report_export,
         }
-        # 从 harness/skills/ 目录自动扫描并注册
         self._auto_discover_skills()
-        # 内置 skill（无 harness 文件）
         self._register_chitchat()
 
     def _auto_discover_skills(self):
-        """扫描 harness/skills/ 目录，自动注册所有 SKILL.md 定义的 skill。"""
         if not os.path.isdir(SKILLS_DIR):
-            # 目录不存在时 fallback 到硬编码
-            self._register_complaint_analysis()
+            self._register_ticket_analysis()
             return
 
         for entry in sorted(os.listdir(SKILLS_DIR)):
@@ -83,7 +74,6 @@ class SkillEngine:
             sid = meta['id']
             handler = self._handlers.get(sid)
             if not handler:
-                # 无对应 handler 的 skill 跳过
                 continue
 
             self.register_skill(sid, {
@@ -95,6 +85,26 @@ class SkillEngine:
                 'handler': handler,
             })
 
+    def _register_ticket_analysis(self):
+        self.register_skill('ticket_analysis', {
+            'name': '工单数据分析',
+            'description': '分析工单数据，生成统计图表',
+            'enabled': True,
+            'category': 'analysis',
+            'priority': 1,
+            'handler': self._handle_ticket_analysis,
+        })
+
+    def _register_chitchat(self):
+        self.register_skill('chitchat', {
+            'name': '智能问答',
+            'description': '回答与工单相关的问题和闲聊',
+            'enabled': True,
+            'category': 'conversation',
+            'priority': 999,
+            'handler': self._handle_chitchat,
+        })
+
     def register_skill(self, skill_id: str, metadata: dict):
         self._skills[skill_id] = metadata
 
@@ -105,20 +115,16 @@ class SkillEngine:
         ]
 
     async def execute_skill(self, skill_id: str, intent: dict) -> dict:
-        """执行指定 skill，返回报告数据。"""
-        skill = self._skills.get(skill_id)
+        skill = self._skills.get(skill_id) or self._skills.get('ticket_analysis')
         if not skill:
             raise ValueError(f"Skill 不存在: {skill_id}")
-        if not skill.get('enabled', True):
-            raise ValueError(f"Skill 已禁用: {skill.get('name', skill_id)}")
 
         handler = skill['handler']
         return await handler(intent)
 
-    # ===== 客诉分析 Skill =====
+    # ===== 工单分析 Handler =====
 
-    async def _handle_complaint_analysis(self, intent: dict) -> dict:
-        """客诉分析 skill 处理器。"""
+    async def _handle_ticket_analysis(self, intent: dict) -> dict:
         if not self.processor:
             return {
                 'message': '暂无可用的数据源，请先上传 Excel 文件或配置数据源路径。',
@@ -128,10 +134,9 @@ class SkillEngine:
             }
 
         filters = intent.get('filters', {})
-        group_by = intent.get('group_by', 'cause_category')
+        group_by = intent.get('group_by', 'status')
         chart_type = intent.get('chart_type', 'pie')
 
-        # 根据 group_by 和 chart_type 选择数据和方法
         charts = []
         insights = []
         data_table = None
@@ -139,89 +144,321 @@ class SkillEngine:
 
         kpis = self.processor.get_summary_kpis(filters)
 
-        if group_by == 'cause_category' or chart_type == 'pie':
-            # 原因大类分布
-            dist = self.processor.get_root_cause_distribution(filters)
+        # ---- 状态分布 ----
+        if group_by == 'status' or chart_type == 'pie':
+            dist = self.processor.get_status_distribution(filters)
             charts.append({
-                'id': 'chart_root_cause',
-                'title': '原因大类分布',
+                'id': 'chart_status',
+                'title': '工单状态分布',
                 'type': 'pie',
                 'option': render_pie(dist['labels'], dist['values']),
             })
-            summary = f'共 {kpis["total"]} 件投诉，原因大类分布如上。'
+            summary = f'共 {kpis["total"]} 件工单，状态分布如上。'
+            if dist['labels']:
+                rows = [[l, str(v), f'{round(v/kpis["total"]*100,1) if kpis["total"] else 0}%'] for l, v in zip(dist['labels'], dist['values'])]
+                data_table = {'headers': ['状态', '数量', '占比'], 'rows': rows}
 
-        elif group_by == 'product_line' or chart_type == 'bar':
-            # 产品线分布
-            dist = self.processor.get_product_line_distribution(filters)
+        # ---- 服务组工作量 ----
+        elif group_by == 'service_group':
+            dist = self.processor.get_service_group_distribution(filters)
             charts.append({
-                'id': 'chart_product_line',
-                'title': '产品线投诉分布',
+                'id': 'chart_sg',
+                'title': '服务组工单量',
                 'type': 'horizontal_bar',
                 'option': render_horizontal_bar(dist['labels'], dist['values']),
             })
-            summary = f'共 {kpis["total"]} 件投诉，覆盖 {kpis["product_line_count"]} 条产品线。'
+            summary = f'共 {kpis["total"]} 件工单，覆盖 {len(dist["labels"])} 个服务组。'
+            if dist['labels']:
+                rows = [[l, str(v)] for l, v in zip(dist['labels'], dist['values'])]
+                data_table = {'headers': ['服务组', '工单数'], 'rows': rows}
 
-        elif group_by == 'defect_type':
-            # 不良类型 TOP
-            top = self.processor.get_defect_top15(filters)
+        # ---- 责任人处理量 ----
+        elif group_by == 'assignee':
+            dist = self.processor.get_assignee_distribution(filters)
             charts.append({
-                'id': 'chart_defect_top',
-                'title': '不良类型 TOP',
-                'type': 'bar',
-                'option': render_bar(top['labels'], top['values']),
+                'id': 'chart_assignee',
+                'title': '责任人处理量 TOP15',
+                'type': 'horizontal_bar',
+                'option': render_horizontal_bar(dist['labels'], dist['values']),
             })
-            summary = f'共 {kpis["total"]} 件投诉，不良类型分布如上。'
+            summary = f'共 {kpis["total"]} 件工单，责任人处理量如上。'
+            if dist['labels']:
+                rows = [[l, str(v)] for l, v in zip(dist['labels'], dist['values'])]
+                data_table = {'headers': ['责任人', '工单数'], 'rows': rows}
 
+        # ---- 部门分布 ----
+        elif group_by == 'department':
+            dist = self.processor.get_department_distribution(filters)
+            charts.append({
+                'id': 'chart_dept',
+                'title': '请求部门分布',
+                'type': 'bar',
+                'option': render_bar(dist['labels'], dist['values']),
+            })
+            summary = f'共 {kpis["total"]} 件工单，涉及 {len(dist["labels"])} 个部门。'
+
+        # ---- 来源渠道分布 ----
+        elif group_by == 'source_channel':
+            dist = self.processor.get_source_channel_distribution(filters)
+            charts.append({
+                'id': 'chart_source',
+                'title': '来源渠道分布',
+                'type': 'pie',
+                'option': render_pie(dist['labels'], dist['values']),
+            })
+            summary = f'共 {kpis["total"]} 件工单，来源渠道分布如上。'
+
+        # ---- 故障原因分组 ----
+        elif group_by == 'fault_group':
+            dist = self.processor.get_fault_group_distribution(filters)
+            charts.append({
+                'id': 'chart_fault',
+                'title': '故障原因分组',
+                'type': 'pie',
+                'option': render_pie(dist['labels'], dist['values']),
+            })
+            summary = f'共 {kpis["total"]} 件工单，故障原因分组如上。'
+
+        # ---- 原因类别 ----
+        elif group_by == 'cause_category':
+            dist = self.processor.get_cause_category_distribution(filters)
+            charts.append({
+                'id': 'chart_cause',
+                'title': '原因类别分布',
+                'type': 'pie',
+                'option': render_pie(dist['labels'], dist['values']),
+            })
+            summary = f'共 {kpis["total"]} 件工单，原因类别分布如上。'
+
+        # ---- 业务系统分布 ----
+        elif group_by == 'business_system':
+            dist = self.processor.get_business_system_distribution(filters)
+            charts.append({
+                'id': 'chart_sys',
+                'title': '业务系统分布',
+                'type': 'horizontal_bar',
+                'option': render_horizontal_bar(dist['labels'], dist['values']),
+            })
+            summary = f'共 {kpis["total"]} 件工单，覆盖 {len(dist["labels"])} 个业务系统。'
+
+        # ---- 解决人 ----
+        elif group_by == 'resolver':
+            dist = self.processor.get_resolver_distribution(filters)
+            charts.append({
+                'id': 'chart_resolver',
+                'title': '解决人处理量',
+                'type': 'horizontal_bar',
+                'option': render_horizontal_bar(dist['labels'], dist['values']),
+            })
+            summary = f'共 {kpis["total"]} 件工单，解决人处理量如上。'
+
+        # ---- 周趋势 ----
+        elif group_by == 'weekly':
+            trend = self.processor.get_weekly_trend(filters)
+            charts.append({
+                'id': 'chart_weekly',
+                'title': '每周工单趋势',
+                'type': 'line',
+                'option': render_line(trend['labels'], [{'name': '工单数', 'data': trend['values']}]),
+            })
+            summary = f'每周工单趋势如上，共 {kpis["total"]} 件工单。'
+
+        # ---- 月趋势 ----
+        elif group_by == 'monthly':
+            trend = self.processor.get_monthly_trend(filters)
+            charts.append({
+                'id': 'chart_monthly',
+                'title': '每月工单趋势',
+                'type': 'line',
+                'option': render_line(trend['labels'], [{'name': '工单数', 'data': trend['values']}]),
+            })
+            summary = f'每月工单趋势如上，共 {kpis["total"]} 件工单。'
+
+        # ---- SLA 趋势 ----
+        elif group_by == 'sla':
+            trend = self.processor.get_sla_weekly_trend(filters)
+            charts.append({
+                'id': 'chart_sla_trend',
+                'title': 'SLA 达标率周趋势',
+                'type': 'line',
+                'option': render_line(trend['labels'], [{'name': 'SLA(%)', 'data': trend['values']}]),
+            })
+            summary = f'SLA 平均达标率 {kpis["sla_avg"]}%，趋势如上。'
+
+        # ---- 解决时效 ----
+        elif group_by == 'resolution_time':
+            buckets = self.processor.get_resolution_time_buckets(filters)
+            charts.append({
+                'id': 'chart_res_time',
+                'title': '解决时效分布',
+                'type': 'bar',
+                'option': render_bar(buckets['labels'], buckets['values']),
+            })
+            summary = f'平均解决时间 {kpis["avg_resolution_days"]} 天。'
+
+        # ---- 挂起分析 ----
+        elif group_by == 'suspended':
+            sus = self.processor.get_suspended_breakdown(filters)
+            charts.append({
+                'id': 'chart_suspended',
+                'title': '挂起原因分析',
+                'type': 'horizontal_bar',
+                'option': render_horizontal_bar(sus['labels'], sus['values']),
+            })
+            summary = f'共 {kpis["suspended_count"]} 件挂起工单（{kpis["suspended_ratio"]}%）。'
+
+        # ---- 交叉分析：服务组×状态 ----
         elif chart_type == 'stacked_bar':
-            # 产品线 × 原因交叉
-            ct = self.processor.get_cross_table(filters)
+            ct = self.processor.get_status_by_service_group(filters)
             charts.append({
                 'id': 'chart_cross',
-                'title': '产品线 × 原因交叉分析',
+                'title': '服务组×状态交叉分析',
                 'type': 'stacked_bar',
-                'option': render_stacked_bar(ct['products'], ct['causes']),
+                'option': render_stacked_bar(ct['groups'], ct['statuses']),
             })
-            summary = f'共 {kpis["total"]} 件投诉，各产品线原因结构对比如上。'
+            summary = f'各服务组工单状态结构如上。'
 
-        elif chart_type == 'rose':
-            # 根据当前 filter 选择细分图表
-            if filters.get('cause_category') == '制造原因':
-                data = self.processor.get_mfg_defect_breakdown(filters)
-            elif filters.get('cause_category') == '研发原因':
-                data = self.processor.get_rnd_defect_breakdown(filters)
-            elif filters.get('cause_category') == '客户原因':
-                data = self.processor.get_cli_defect_breakdown(filters)
-            elif filters.get('cause_category') == '仓储原因':
-                data = self.processor.get_wh_defect_breakdown(filters)
-            else:
-                data = self.processor.get_mfg_defect_breakdown(filters)
+        # ---- 新增：故障根因深度分析 ----
+        elif group_by == 'root_cause':
+            rc = self.processor.get_fault_root_cause_analysis(filters)
+            if rc.get('fault_top_n'):
+                top = rc['fault_top_n'][:15]
+                labels = [t['cause'] for t in top]
+                values = [t['count'] for t in top]
+                charts.append({
+                    'id': 'chart_root_cause',
+                    'title': '故障根因 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(labels, values),
+                })
+                summary = f'故障根因分析完成，共 {len(rc.get("fault_top_n", []))} 类故障原因。'
+                rows = [[t['cause'], str(t['count'])] for t in top]
+                data_table = {'headers': ['故障原因', '次数'], 'rows': rows}
+            if rc.get('symptom_clusters'):
+                clusters = rc['symptom_clusters'][:10]
+                insights = [{
+                    'severity': 'info',
+                    'title': f'症状聚类「{c["symptom"]}」({c["count"]}次)→方案: {", ".join([s[0] for s in c.get("top_solutions", [])[:2]])}',
+                    'desc': f'关联根因: {", ".join([r[0] for r in c.get("top_causes", [])[:2]])}',
+                } for c in clusters]
 
+        # ---- 新增：重复工单挖掘 ----
+        elif group_by == 'recurring':
+            dup = self.processor.get_recurring_tickets(filters)
+            if dup['by_fault_group']:
+                top = dup['by_fault_group'][:15]
+                labels = [d['cause'] for d in top]
+                values = [d['count'] for d in top]
+                charts.append({
+                    'id': 'chart_recurring',
+                    'title': '重复故障 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(labels, values),
+                })
+                summary = f'重复工单挖掘完成。Top5 重复故障占比 {dup["summary"]["dup_ratio"]}%。'
+                rows = [[d['cause'], str(d['count']), f'{d["pct"]}%'] for d in top]
+                data_table = {'headers': ['故障原因', '重复次数', '占比'], 'rows': rows}
+
+        # ---- 新增：运维质量指标 ----
+        elif group_by == 'ops_quality':
+            ops = self.processor.get_ops_quality_metrics(filters)
             charts.append({
-                'id': 'chart_rose',
-                'title': f'{filters.get("cause_category", "制造原因")}细分',
-                'type': 'rose',
-                'option': render_rose(data['labels'], data['values']),
-            })
-            summary = f'{filters.get("cause_category", "制造原因")}细分如上。'
-
-        elif group_by == 'customer':
-            kc = self.processor.get_key_customers(filters)
-            charts.append({
-                'id': 'chart_key_customers',
-                'title': '大客户投诉排名',
+                'id': 'chart_ops',
+                'title': '运维质量指标',
                 'type': 'horizontal_bar',
                 'option': render_horizontal_bar(
-                    kc['labels'], kc['values'],
-                    color=('#9b59b6', '#c39bd3'),
+                    ['退回率', '挂起率', '撤单率', 'SLA达标率'],
+                    [ops['returned_ratio'], ops['suspended_ratio'], ops['cancelled_ratio'], ops['sla_ratio']],
                 ),
             })
-            summary = f'大客户投诉共 {kpis["key_customer_count"]} 件，占总投诉 {kpis["key_customer_ratio"]}%。'
+            summary = f'退回率 {ops["returned_ratio"]}% / 挂起率 {ops["suspended_ratio"]}% / 撤单率 {ops["cancelled_ratio"]}% / SLA达标率 {ops["sla_ratio"]}%。'
+            data_table = {'headers': ['指标', '值', '数量'], 'rows': [
+                ['退回服务台率', f'{ops["returned_ratio"]}%', f'{ops["returned_count"]}件'],
+                ['挂起率', f'{ops["suspended_ratio"]}%', f'{ops["suspended_count"]}件'],
+                ['撤单率', f'{ops["cancelled_ratio"]}%', f'{ops["cancelled_count"]}件'],
+                ['SLA达标率', f'{ops["sla_ratio"]}%', ''],
+                ['平均解决', f'{ops["avg_resolution_days"]}天', ''],
+            ]}
 
-        # 生成洞察
+        # ---- 新增：症状→方案聚类 ----
+        elif group_by == 'symptom_solution':
+            mapping = self.processor.get_symptom_solution_mapping(filters)
+            clusters = mapping.get('clusters', [])[:15]
+            if clusters:
+                labels = [c['symptom'] for c in clusters]
+                values = [c['count'] for c in clusters]
+                charts.append({
+                    'id': 'chart_symptom',
+                    'title': '症状→方案聚类 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(labels, values),
+                })
+                summary = f'症状-方案聚类完成，共 {mapping["total_symptoms"]} 类症状。'
+                rows = []
+                for c in clusters:
+                    sol_str = ', '.join([s[0] for s in c.get('top_solutions', [])[:3]])
+                    rows.append([c['symptom'], str(c['count']), f'{c["avg_resolution_days"]}天', sol_str])
+                data_table = {'headers': ['症状', '次数', '平均解决', '推荐方案'], 'rows': rows}
+
+        # ---- 新增：请求人行为与组织分析 ----
+        elif group_by == 'requester':
+            behavior = self.processor.get_requester_behavior(filters)
+            if behavior.get('top_requesters') and behavior['top_requesters']['values']:
+                charts.append({
+                    'id': 'chart_requester',
+                    'title': '高频请求人 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(behavior['top_requesters']['labels'][:15], behavior['top_requesters']['values'][:15]),
+                })
+                summary = f'共 {behavior["summary"]["total_requesters"]} 个请求人，覆盖 {behavior["summary"]["total_departments"]} 个部门。'
+                rows = [[l, str(v)] for l, v in zip(behavior['top_requesters']['labels'][:15], behavior['top_requesters']['values'][:15])]
+                data_table = {'headers': ['请求人', '工单数'], 'rows': rows}
+            if behavior.get('department_distribution'):
+                charts.append({
+                    'id': 'chart_req_dept',
+                    'title': '请求部门分布',
+                    'type': 'bar',
+                    'option': render_bar(behavior['department_distribution']['labels'], behavior['department_distribution']['values']),
+                })
+
+        # ---- 新增：性质占比与趋势 ----
+        elif group_by == 'nature_trend':
+            nt = self.processor.get_nature_trend(filters)
+            dist = nt['distribution']
+            if dist['labels']:
+                charts.append({
+                    'id': 'chart_nature_pie',
+                    'title': '各类性质占比',
+                    'type': 'pie',
+                    'option': render_pie(dist['labels'], dist['values']),
+                })
+                summary = f'各类性质占比分析完成。'
+                total = sum(dist['values'])
+                rows = [[l, str(v), f'{round(v/total*100,1)}%'] for l, v in zip(dist['labels'], dist['values'])]
+                data_table = {'headers': ['性质', '数量', '占比'], 'rows': rows}
+            if nt['trend']['series']:
+                charts.append({
+                    'id': 'chart_nature_trend',
+                    'title': '各类性质周趋势',
+                    'type': 'line',
+                    'option': render_line(nt['trend']['labels'], nt['trend']['series']),
+                })
+
+        # ---- 默认：KPI 汇总 ----
+        else:
+            data_table = {'headers': ['指标', '值'], 'rows': [
+                ['总工单数', str(kpis['total'])],
+                ['已解决', f'{kpis["resolved_count"]}件 ({kpis["resolved_ratio"]}%)'],
+                ['SLA 达标率', f'{kpis["sla_ratio"]}%'],
+                ['SLA 平均', f'{kpis["sla_avg"]}%'],
+                ['挂起工单', f'{kpis["suspended_count"]}件 ({kpis["suspended_ratio"]}%)'],
+                ['平均解决天数', f'{kpis["avg_resolution_days"]}天'],
+                ['退回服务台', f'{kpis["returned_count"]}件'],
+                ['已评价', f'{kpis["evaluated_count"]}件 ({kpis["evaluated_ratio"]}%)'],
+            ]}
+            summary = f'工单 KPI 汇总：总 {kpis["total"]} 件，SLA 达标率 {kpis["sla_ratio"]}%。'
+
         insights = self.processor.generate_insights(filters)
-
-        # 数据表
-        data_table = self._build_data_table(group_by, filters)
 
         return {
             'message': summary,
@@ -230,52 +467,9 @@ class SkillEngine:
             'data_table': data_table,
         }
 
-    def _build_data_table(self, group_by: str, filters: dict) -> dict:
-        """构建数据明细表格。"""
-        if group_by == 'cause_category':
-            dist = self.processor.get_root_cause_distribution(filters)
-            total = sum(dist['values'])
-            rows = [
-                [label, str(value), f'{round(value / total * 100, 1) if total else 0}%']
-                for label, value in zip(dist['labels'], dist['values'])
-            ]
-            return {'headers': ['原因分类', '数量', '占比'], 'rows': rows}
-
-        elif group_by == 'product_line':
-            dist = self.processor.get_product_line_distribution(filters)
-            total = sum(dist['values'])
-            rows = [
-                [label, str(value), f'{round(value / total * 100, 1) if total else 0}%']
-                for label, value in zip(dist['labels'], dist['values'])
-            ]
-            return {'headers': ['产品线', '数量', '占比'], 'rows': rows}
-
-        elif group_by == 'defect_type':
-            top = self.processor.get_defect_top15(filters)
-            total = sum(top['values'])
-            rows = [
-                [label, str(value), f'{round(value / total * 100, 1) if total else 0}%']
-                for label, value in zip(top['labels'], top['values'])
-            ]
-            return {'headers': ['不良类型', '数量', '占比'], 'rows': rows}
-
-        elif group_by == 'customer':
-            kc = self.processor.get_key_customers(filters)
-            rows = [[label, str(value)] for label, value in zip(kc['labels'], kc['values'])]
-            return {'headers': ['客户', '投诉数'], 'rows': rows}
-
-        kpis = self.processor.get_summary_kpis(filters)
-        return {'headers': ['指标', '值'], 'rows': [
-            ['总投诉数', str(kpis['total'])],
-            ['产品线数', str(kpis['product_line_count'])],
-            ['原因不明', f'{kpis["unknown_count"]}件 ({kpis["unknown_ratio"]}%)'],
-            ['大客户投诉', f'{kpis["key_customer_count"]}件 ({kpis["key_customer_ratio"]}%)'],
-        ]}
-
-    # ===== 数据检索查询 Skill =====
+    # ===== 数据查询 Handler =====
 
     async def _handle_data_query(self, intent: dict) -> dict:
-        """数据检索查询 skill 处理器：精确检索客诉数据。"""
         if not self.processor:
             return {
                 'message': '暂无可用的数据源，请先上传 Excel 文件。',
@@ -291,65 +485,85 @@ class SkillEngine:
         data_table = None
         summary = ''
 
-        if query_type == 'key_customers':
-            kc = self.processor.get_key_customers(filters)
-            charts.append({
-                'id': 'chart_key_customers',
-                'title': '大客户投诉排名',
-                'type': 'horizontal_bar',
-                'option': render_horizontal_bar(kc['labels'], kc['values'], color=('#9b59b6', '#c39bd3')),
-            })
-            rows = [[l, str(v)] for l, v in zip(kc['labels'], kc['values'])]
-            data_table = {'headers': ['客户', '投诉数'], 'rows': rows}
-            summary = f'大客户投诉排名查询完成，共 {len(kc["labels"])} 个客户。'
+        # 按 query_type 分发到不同的 TicketProcessor 方法
+        query_handlers = {
+            'status_distribution': lambda f: (self.processor.get_status_distribution(f), 'pie', '状态分布'),
+            'service_group_distribution': lambda f: (self.processor.get_service_group_distribution(f), 'horizontal_bar', '服务组工作量'),
+            'assignee_distribution': lambda f: (self.processor.get_assignee_distribution(f, top_n=15), 'horizontal_bar', '责任人处理量'),
+            'department_distribution': lambda f: (self.processor.get_department_distribution(f), 'bar', '部门分布'),
+            'source_channel_distribution': lambda f: (self.processor.get_source_channel_distribution(f), 'pie', '来源渠道分布'),
+            'fault_group_distribution': lambda f: (self.processor.get_fault_group_distribution(f), 'pie', '故障原因分组'),
+            'cause_category_distribution': lambda f: (self.processor.get_cause_category_distribution(f), 'pie', '原因类别'),
+            'weekly_trend': lambda f: (self.processor.get_weekly_trend(f), 'line', '每周趋势'),
+            'monthly_trend': lambda f: (self.processor.get_monthly_trend(f), 'line', '每月趋势'),
+            'sla_weekly_trend': lambda f: (self.processor.get_sla_weekly_trend(f), 'line', 'SLA趋势'),
+            'suspended_breakdown': lambda f: (self.processor.get_suspended_breakdown(f), 'horizontal_bar', '挂起原因'),
+            'evaluation_summary': lambda f: (self.processor.get_evaluation_summary(f), None, '满意度'),
+            'resolution_time_buckets': lambda f: (self.processor.get_resolution_time_buckets(f), 'bar', '解决时效'),
+            'fault_root_cause_analysis': lambda f: (self.processor.get_fault_root_cause_analysis(f), None, '故障根因分析'),
+            'fault_cause_trend': lambda f: (self.processor.get_fault_cause_trend(f), 'line', '故障原因趋势'),
+            'symptom_solution_mapping': lambda f: (self.processor.get_symptom_solution_mapping(f), None, '症状方案聚类'),
+            'recurring_tickets': lambda f: (self.processor.get_recurring_tickets(f), None, '重复工单'),
+            'nature_trend': lambda f: (self.processor.get_nature_trend(f), None, '性质趋势'),
+            'requester_behavior': lambda f: (self.processor.get_requester_behavior(f), None, '请求人行为'),
+            'ops_quality_metrics': lambda f: (self.processor.get_ops_quality_metrics(f), None, '运维质量'),
+        }
 
-        elif query_type == 'defect_top15':
-            top = self.processor.get_defect_top15(filters)
-            charts.append({
-                'id': 'chart_defect_top15',
-                'title': '不良类型 TOP15',
-                'type': 'bar',
-                'option': render_bar(top['labels'], top['values']),
-            })
-            total = sum(top['values'])
-            rows = [[l, str(v), f'{round(v / total * 100, 1) if total else 0}%'] for l, v in zip(top['labels'], top['values'])]
-            data_table = {'headers': ['不良类型', '数量', '占比'], 'rows': rows}
-            summary = f'不良类型 TOP15 查询完成。'
+        handler = query_handlers.get(query_type)
+        if handler:
+            data, ctype, title = handler(filters)
+            if ctype and data.get('labels'):
+                if ctype == 'pie':
+                    opt = render_pie(data['labels'], data['values'])
+                elif ctype == 'horizontal_bar':
+                    opt = render_horizontal_bar(data['labels'], data['values'])
+                elif ctype == 'bar':
+                    opt = render_bar(data['labels'], data['values'])
+                elif ctype == 'line':
+                    opt = render_line(data['labels'], [{'name': title, 'data': data['values']}])
+                else:
+                    opt = render_pie(data['labels'], data['values'])
 
-        elif query_type == 'product_line_distribution':
-            dist = self.processor.get_product_line_distribution(filters)
-            charts.append({
-                'id': 'chart_pl_dist',
-                'title': '产品线分布',
-                'type': 'horizontal_bar',
-                'option': render_horizontal_bar(dist['labels'], dist['values']),
-            })
-            total = sum(dist['values'])
-            rows = [[l, str(v), f'{round(v / total * 100, 1) if total else 0}%'] for l, v in zip(dist['labels'], dist['values'])]
-            data_table = {'headers': ['产品线', '数量', '占比'], 'rows': rows}
-            summary = f'产品线分布查询完成，共 {len(dist["labels"])} 条产品线。'
+                charts.append({
+                    'id': f'chart_{query_type}',
+                    'title': title,
+                    'type': ctype,
+                    'option': opt,
+                })
 
-        elif query_type == 'cross_table':
-            ct = self.processor.get_cross_table(filters)
-            charts.append({
-                'id': 'chart_cross',
-                'title': '产品线×原因交叉表',
-                'type': 'stacked_bar',
-                'option': render_stacked_bar(ct['categories'], ct['series']),
-            })
-            summary = '产品线×原因交叉查询完成。'
+            if data.get('labels') and data.get('values'):
+                # 趋势类：简单显示数据
+                if query_type in ('weekly_trend', 'monthly_trend', 'sla_weekly_trend'):
+                    rows = [[l, str(v)] for l, v in zip(data['labels'], data['values'])][-10:]
+                    data_table = {'headers': ['时间', '值'], 'rows': rows}
+                elif query_type == 'evaluation_summary':
+                    rows = [
+                        ['服务态度', str(data.get('attitude_avg', 0))],
+                        ['技术水平', str(data.get('tech_avg', 0))],
+                        ['响应时效', str(data.get('response_avg', 0))],
+                        ['评价数', str(data.get('eval_count', 0))],
+                    ]
+                    data_table = {'headers': ['指标', '评分'], 'rows': rows}
+                elif query_type == 'resolution_time_buckets':
+                    total = sum(data['values'])
+                    rows = [[l, str(v), f'{round(v/total*100,1) if total else 0}%'] for l, v in zip(data['labels'], data['values'])]
+                    data_table = {'headers': ['耗时', '数量', '占比'], 'rows': rows}
+                else:
+                    total = sum(data['values']) if data['values'] else 1
+                    rows = [[l, str(v), f'{round(v/total*100,1) if total else 0}%'] for l, v in zip(data['labels'], data['values'])]
+                    data_table = {'headers': ['类别', '数量', '占比'], 'rows': rows}
 
+            summary = f'{title}查询完成。'
         else:
-            # summary_kpis fallback
             kpis = self.processor.get_summary_kpis(filters)
             rows = [
-                ['总投诉数', str(kpis['total'])],
-                ['产品线数', str(kpis['product_line_count'])],
-                ['原因不明', f'{kpis["unknown_count"]}件 ({kpis["unknown_ratio"]}%)'],
-                ['大客户投诉', f'{kpis["key_customer_count"]}件 ({kpis["key_customer_ratio"]}%)'],
+                ['总工单数', str(kpis['total'])],
+                ['已解决', f'{kpis["resolved_count"]}件 ({kpis["resolved_ratio"]}%)'],
+                ['SLA 达标率', f'{kpis["sla_ratio"]}%'],
+                ['平均解决天数', f'{kpis["avg_resolution_days"]}天'],
             ]
             data_table = {'headers': ['指标', '值'], 'rows': rows}
-            summary = f'KPI 汇总：总投诉 {kpis["total"]} 件，涉及 {kpis["product_line_count"]} 条产品线。'
+            summary = f'KPI 汇总：总工单 {kpis["total"]} 件，SLA 达标率 {kpis["sla_ratio"]}%。'
 
         insights = self.processor.generate_insights(filters)
 
@@ -360,10 +574,9 @@ class SkillEngine:
             'data_table': data_table,
         }
 
-    # ===== 报告导出 Skill =====
+    # ===== 报告导出 Handler =====
 
     async def _handle_report_export(self, intent: dict) -> dict:
-        """报告导出 skill 处理器：组装分析结果并导出。"""
         if not self.processor:
             return {
                 'message': '暂无可用的数据源，请先上传 Excel 文件。',
@@ -372,178 +585,154 @@ class SkillEngine:
                 'data_table': None,
             }
 
-        # 收集全部分析数据
         filters = intent.get('filters', {})
         kpis = self.processor.get_summary_kpis(filters)
-        rc_dist = self.processor.get_root_cause_distribution(filters)
-        pl_dist = self.processor.get_product_line_distribution(filters)
-        defect_top = self.processor.get_defect_top15(filters)
+
+        status_dist = self.processor.get_status_distribution(filters)
+        sg_dist = self.processor.get_service_group_distribution(filters)
+        assignee_dist = self.processor.get_assignee_distribution(filters)
+        weekly_trend = self.processor.get_weekly_trend(filters)
         insights = self.processor.generate_insights(filters)
 
         charts = [
             {
-                'id': 'chart_root_cause',
-                'title': '原因大类分布',
+                'id': 'chart_status',
+                'title': '工单状态分布',
                 'type': 'pie',
-                'option': render_pie(rc_dist['labels'], rc_dist['values']),
+                'option': render_pie(status_dist['labels'], status_dist['values']),
             },
             {
-                'id': 'chart_pl_dist',
-                'title': '产品线投诉分布',
+                'id': 'chart_sg',
+                'title': '服务组工单量',
                 'type': 'horizontal_bar',
-                'option': render_horizontal_bar(pl_dist['labels'], pl_dist['values']),
+                'option': render_horizontal_bar(sg_dist['labels'], sg_dist['values']),
             },
             {
-                'id': 'chart_defect_top15',
-                'title': '不良类型 TOP15',
-                'type': 'bar',
-                'option': render_bar(defect_top['labels'], defect_top['values']),
+                'id': 'chart_assignee',
+                'title': '责任人处理量',
+                'type': 'horizontal_bar',
+                'option': render_horizontal_bar(assignee_dist['labels'], assignee_dist['values']),
             },
         ]
 
-        summary = (
-            f'报告数据已组装完成：总投诉 {kpis["total"]} 件，'
-            f'{len(charts)} 张图表，{len(insights)} 条洞察。'
-            f'请使用报表中心的导出功能下载 HTML 或 Excel 格式报告。'
-        )
+        if weekly_trend['labels']:
+            charts.append({
+                'id': 'chart_weekly',
+                'title': '每周工单趋势',
+                'type': 'line',
+                'option': render_line(weekly_trend['labels'], [{'name': '工单数', 'data': weekly_trend['values']}]),
+            })
+
+        data_table = {'headers': ['指标', '值'], 'rows': [
+            ['总工单数', str(kpis['total'])],
+            ['已解决', f'{kpis["resolved_count"]}件 ({kpis["resolved_ratio"]}%)'],
+            ['SLA 达标率', f'{kpis["sla_ratio"]}%'],
+            ['SLA 平均', f'{kpis["sla_avg"]}%'],
+            ['挂起工单', f'{kpis["suspended_count"]}件 ({kpis["suspended_ratio"]}%)'],
+            ['平均解决天数', f'{kpis["avg_resolution_days"]}天'],
+            ['退回服务台', f'{kpis["returned_count"]}件'],
+            ['已评价', f'{kpis["evaluated_count"]}件 ({kpis["evaluated_ratio"]}%)'],
+        ]}
 
         return {
-            'message': summary,
+            'message': f'工单分析报告已生成。共 {kpis["total"]} 件工单，SLA 达标率 {kpis["sla_ratio"]}%。',
             'charts': charts,
             'insights': insights,
-            'data_table': None,
+            'data_table': data_table,
         }
 
-    # ===== 闲聊 Skill =====
-
-    def _register_chitchat(self):
-        """注册闲聊 skill。"""
-        self.register_skill('chitchat', {
-            'name': '闲聊助手',
-            'description': '回答与客诉数据无关的通用问题',
-            'enabled': True,
-            'handler': self._handle_chitchat,
-        })
+    # ===== 智能问答 Handler =====
 
     async def _handle_chitchat(self, intent: dict) -> dict:
-        """闲聊/数据问答 skill 处理器：转发给 LLM，带数据上下文。"""
         user_message = intent.get('message', '')
 
         if not self.llm:
             return {
-                'message': '你好！我是客诉数据分析助手，主要负责分析投诉数据。如果你有数据分析相关的问题，我很乐意帮忙！',
+                'message': '你好！我是工单数据分析助手，可以帮助你分析工单的分布、趋势、SLA 达标率、重复问题挖掘、故障根因分析等。你可以试着问我"工单状态分布"、"最近趋势"、"哪些故障反复出现"、"请求人行为分析"。',
                 'charts': [],
                 'insights': [],
                 'data_table': None,
             }
 
-        # 构建数据上下文
         data_context = ""
         if self.processor:
             try:
                 kpis = self.processor.get_summary_kpis()
-                rc_dist = self.processor.get_root_cause_distribution()
-                pl_dist = self.processor.get_product_line_distribution()
-                defect_top = self.processor.get_defect_top15(filters=None, top_n=15)
-                mfg = self.processor.get_mfg_defect_breakdown()
-                rnd = self.processor.get_rnd_defect_breakdown()
-                cli = self.processor.get_cli_defect_breakdown()
-                wh = self.processor.get_wh_defect_breakdown()
+                status_dist = self.processor.get_status_distribution()
+                sg_dist = self.processor.get_service_group_distribution()
+                eval_data = self.processor.get_evaluation_summary()
+                recurring = self.processor.get_recurring_tickets()
+                ops = self.processor.get_ops_quality_metrics()
+                behavior = self.processor.get_requester_behavior()
+                root_cause = self.processor.get_fault_root_cause_analysis()
 
-                cause_details = []
-                for label, value in zip(rc_dist['labels'], rc_dist['values']):
-                    cause_details.append(f"{label}: {value}件")
+                status_str = ', '.join([f"{l}:{v}件" for l, v in zip(status_dist['labels'][:5], status_dist['values'][:5])])
+                sg_str = ', '.join([f"{l}:{v}件" for l, v in zip(sg_dist['labels'][:5], sg_dist['values'][:5])])
 
-                # 大客户数据
-                key_customers = self.processor.get_key_customers()
-                key_customer_list = ', '.join([f'{l}({v}件)' for l, v in zip(key_customers['labels'][:10], key_customers['values'][:10])])
-                key_customer_names = '、'.join(self.processor.KEY_CUSTOMERS)
+                recurring_str = ''
+                if recurring['by_fault_group']:
+                    top3 = recurring['by_fault_group'][:3]
+                    recurring_str = ', '.join([f'"{d["cause"]}"({d["count"]}次)' for d in top3])
 
-                # 各原因大类下的全部不良类型细分（用于交叉查询）
-                def _fmt_breakdown(data):
-                    return ', '.join([f'{l}({v}件)' for l, v in zip(data['labels'], data['values'])]) or '无'
+                root_cause_str = ''
+                if root_cause.get('fault_top_n'):
+                    top3_fault = root_cause['fault_top_n'][:3]
+                    root_cause_str = ', '.join([f'"{f["cause"]}"({f["count"]}次)' for f in top3_fault])
 
-                # TOP 5 不良类型的跨原因大类分布（解决“54件颜色波动怎么分布”的问题）
-                defect_cross_lines = []
-                try:
-                    df = self.processor.df
-                    cause_col = '原因大类'
-                    defect_col = '二级不良'
-                    top5_defects = defect_top['labels'][:5]
-                    # rc_dist['labels'] 已包含所有原因大类（含原因不明）
-                    all_causes = rc_dist['labels']
-                    for defect_name in top5_defects:
-                        total_cnt = 0
-                        parts = []
-                        for cause_label in all_causes:
-                            cnt = len(df[(df[defect_col] == defect_name) & (df[cause_col] == cause_label)])
-                            if cnt > 0:
-                                parts.append(f'{cause_label}{cnt}件')
-                                total_cnt += cnt
-                        if parts:
-                            defect_cross_lines.append(f'  {defect_name}(总{total_cnt}件): {", ".join(parts)}')
-                except Exception:
-                    defect_cross_lines = []
-                defect_cross_str = '\n'.join(defect_cross_lines) if defect_cross_lines else '无交叉数据'
+                behavior_str = ''
+                if behavior.get('top_requesters') and behavior['top_requesters']['values']:
+                    req_top = list(zip(behavior['top_requesters']['labels'][:3], behavior['top_requesters']['values'][:3]))
+                    behavior_str = ', '.join([f'"{r[0]}"({r[1]}件)' for r in req_top])
 
-                data_context = f"""\n当前客诉数据摘要：
-- 总投诉数: {kpis['total']}件
-- 产品线数: {kpis['product_line_count']}条
-- 原因大类分布: {', '.join(cause_details)}
-- 产品线投诉排名: {', '.join([f'{l}({v}件)' for l, v in zip(pl_dist['labels'], pl_dist['values'])])}
-- 不良类型TOP15: {', '.join([f'{l}({v}件)' for l, v in zip(defect_top['labels'], defect_top['values'])])}
-- TOP5不良类型的原因大类分布：
-{defect_cross_str}
-- 制造原因下不良类型: {_fmt_breakdown(mfg)}
-- 研发原因下不良类型: {_fmt_breakdown(rnd)}
-- 客户原因下不良类型: {_fmt_breakdown(cli)}
-- 仓储原因下不良类型: {_fmt_breakdown(wh)}
-- 原因不明: {kpis['unknown_count']}件 ({kpis['unknown_ratio']}%)
-- 大客户投诉: {kpis['key_customer_count']}件 ({kpis['key_customer_ratio']}%)
-- 大客户投诉排名: {key_customer_list}
-- 大客户名单(预定义): {key_customer_names}
-
-分析方法：
-1. 原因分类：根据“初步调查”列的文本，使用46条正则规则提取原因关键词（如“标签贴错”→仓储原因，“配色/混色不均”→制造原因），再映射到5大类：制造原因、研发原因、客户原因、仓储原因、原料原因。无法匹配的归为“原因不明”。
-2. 大客户识别：系统预定义了{len(self.processor.KEY_CUSTOMERS)}家大客户名单（{key_customer_names}），通过在“初步调查”文本中匹配这些关键词来识别大客户投诉记录。如果Excel中包含“大客户体系”列则直接使用该列数据。
-3. 不良类型统计：基于“二级不良”列进行分组计数。同一不良类型可能出现在不同原因大类下（如“颜色波动”可能同时存在于制造原因和客户原因中），各原因大类下的数量之和等于该不良类型的总投诉数。
-回答规则：
-- 当用户询问某个不良类型的分布时，优先引用“TOP5不良类型的原因大类分布”数据，完整列出所有原因大类及对应数量，不要只说“主要分布”而省略部分类别。
-- 当用户提到某个具体数字时，请先在上述数据中查找匹配项（包括各原因大类细分和交叉分布），不要仅看总数就否定用户的说法。
-- 如果找不到精确匹配，说明可能来自特定的筛选条件组合（如某产品线+某原因大类），请诚实告知无法确认具体来源并建议用户指明筛选条件。"""
+                data_context = f"""【当前ITSM工单数据全景】
+总工单: {kpis['total']}件 | 已解决: {kpis['resolved_count']}件({kpis['resolved_ratio']}%)
+SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis['avg_resolution_days']}天
+挂起: {kpis['suspended_count']}件 | 退回: {kpis['returned_count']}件 | 撤单: {kpis['cancelled_count']}件
+状态分布: {status_str}
+服务组TOP5: {sg_str}
+重复故障TOP3: {recurring_str or '无'}
+根因TOP3: {root_cause_str or '无'}
+高频请求人TOP3: {behavior_str or '无'}
+满意度: 服务态度{round(float(eval_data.get('attitude_avg', 0)), 1)}分/技术水平{round(float(eval_data.get('tech_avg', 0)), 1)}分/响应时效{round(float(eval_data.get('response_avg', 0)), 1)}分({eval_data.get('eval_count', 0)}条)
+退回率: {ops['returned_ratio']}% | 挂起率: {ops['suspended_ratio']}% | 撤单率: {ops['cancelled_ratio']}%
+组织广度: {behavior.get('summary', {}).get('total_departments', 0)}个部门/{behavior.get('summary', {}).get('total_orgs', 0)}个机构/{behavior.get('summary', {}).get('total_requesters', 0)}个请求人"""
             except Exception:
                 data_context = ""
 
-        system_prompt = (
-            "你是金发集团的客诉数据分析助手。你可以回答通用问题，"
-            "但你的专长是客诉数据分析。回答要准确、简洁，不超过200字。"
-            "如果用户问的数据相关问题，请基于提供的数据摘要回答。"
-            "如果用户问分析方法，请解释正则规则提取+大类映射的方法论。"
-            f"{data_context}"
-        )
+        system_prompt = f"""你是ITSM工单数据分析助手MiMo，具备以下核心分析能力：
+
+1. **故障根因与问题分类** — 在症状、故障原因、解决方案之间建立关联，精准归类
+2. **运维质量改进** — 分析退回率/挂起率/撤单率/SLA趋势，定位运维短板
+3. **高频故障挖掘** — 识别重复出现的同类工单，推动根本解决
+4. **TopN故障趋势** — 跟踪主要故障原因的时间走势
+5. **请求人行为与组织分析** — 分析哪些部门/人员提交最多、是否有异常行为模式
+6. **症状→解决方案聚类** — 为常见症状关联最佳解决方案
+
+{data_context}
+
+回答原则：
+- 先理解用户提问的真实意图（分析？诊断？建议？），精准分类
+- 根据数据上下文进行详细分析，给出有深度的洞察
+- 识别数据中的异常模式（突发增长、集中故障、重复问题）
+- 回答时引用具体数据支撑观点
+- 如数据不足，说明原因并建议补充方式
+- 对于分析类问题，给出可操作的改进建议
+- 使用列表或分层结构让分析清晰易读"""
 
         messages = [
             {"role": "system", "content": system_prompt},
         ]
 
-        # 加入对话历史（保持上下文连贯性）
         chat_history = intent.get('chat_history', [])
-        if chat_history:
-            # 只取最近的对话轮次，避免token过长
-            for msg in chat_history[-6:]:
-                if msg.get('role') in ('user', 'assistant') and msg.get('content'):
-                    messages.append({"role": msg['role'], "content": msg['content']})
+        for m in chat_history[-6:]:
+            messages.append({"role": m['role'], "content": m['content']})
 
-        # 当前用户消息
         messages.append({"role": "user", "content": user_message})
 
-        try:
-            reply = await self.llm.chat_completion(messages, temperature=0.7, max_tokens=512)
-        except Exception:
-            reply = '抱歉，我暂时无法回答，请稍后再试。'
+        response = await self.llm.chat_completion(messages, temperature=0.7, max_tokens=1536)
 
         return {
-            'message': reply,
+            'message': response,
             'charts': [],
             'insights': [],
             'data_table': None,

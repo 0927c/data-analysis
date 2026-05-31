@@ -8,7 +8,7 @@ capabilities:
   - HTML 导出
   - Excel 导出
 allowed_tools:
-  - complaint_query
+  - ticket_query
   - chart_render
   - report_export
 routing_keywords:

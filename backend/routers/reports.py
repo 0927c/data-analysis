@@ -14,18 +14,18 @@ from backend.dependencies import get_current_user
 from backend.models import User, Report
 from backend.schemas import ReportOut, ReportDetail
 from backend.services.export_service import export_html, export_excel
-from backend.services.complaint_processor import ComplaintProcessor
+from backend.services.ticket_processor import TicketProcessor
 
 router = APIRouter()
 
-_processor: Optional[ComplaintProcessor] = None
+_processor: Optional[TicketProcessor] = None
 
 
-def get_processor() -> ComplaintProcessor:
+def get_processor() -> TicketProcessor:
     return _processor
 
 
-def set_processor(p: ComplaintProcessor):
+def set_processor(p: TicketProcessor):
     global _processor
     _processor = p
 

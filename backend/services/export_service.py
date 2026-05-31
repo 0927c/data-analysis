@@ -8,7 +8,7 @@ import jinja2
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-from backend.services.complaint_processor import ComplaintProcessor
+from backend.services.ticket_processor import TicketProcessor
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>

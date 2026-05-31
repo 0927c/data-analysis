@@ -10,7 +10,7 @@ from backend.config import settings
 from backend.database import engine, Base, get_db
 from backend.auth import get_current_user
 from backend.models import User
-from backend.services.complaint_processor import ComplaintProcessor
+from backend.services.ticket_processor import TicketProcessor
 from backend.services.conversation_manager import ConversationManager
 from backend.services.intent_parser import IntentParser
 from backend.services.skill_engine import SkillEngine
@@ -29,16 +29,16 @@ async def lifespan(app: FastAPI):
 
     # 初始化服务
     processor = None
-    if settings.COMPLAINT_EXCEL_PATH:
+    if settings.TICKET_EXCEL_PATH:
         try:
-            processor = ComplaintProcessor(settings.COMPLAINT_EXCEL_PATH)
-            _ = processor.df  # Preload data
+            processor = TicketProcessor(settings.TICKET_EXCEL_PATH)
+            _ = processor.df
         except FileNotFoundError:
-            print(f"Warning: Excel 文件不存在: {settings.COMPLAINT_EXCEL_PATH}，数据分析功能不可用")
+            print(f"Warning: Excel 文件不存在: {settings.TICKET_EXCEL_PATH}，数据分析功能不可用")
         except Exception as e:
             print(f"Warning: 加载 Excel 失败: {e}，数据分析功能不可用")
     else:
-        print("Warning: COMPLAINT_EXCEL_PATH 未配置，数据分析功能不可用")
+        print("Warning: TICKET_EXCEL_PATH 未配置，数据分析功能不可用")
 
     conversation_manager = ConversationManager()
 
@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
     from internal.memory.store import MemoryStore
     from internal.router.agent_registry import AgentRegistry
     from internal.router.skill_router import SkillRouter
-    from internal.tools.complaint_query import ComplaintQueryTool
+    from internal.tools.ticket_query import TicketQueryTool
     from internal.tools.chart_render import ChartRenderTool
     from internal.tools.report_export import ReportExportTool
     from internal.router import harness_router
@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI):
     registry.load_all()
 
     tools = [
-        ComplaintQueryTool(processor),
+        TicketQueryTool(processor),
         ChartRenderTool(),
         ReportExportTool(processor),
     ]

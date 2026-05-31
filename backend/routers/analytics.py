@@ -1,4 +1,4 @@
-"""数据分析路由 — 对应 report.html 的 7 张图表数据。"""
+"""数据分析路由 — 工单分析版本。"""
 
 from typing import Optional
 
@@ -6,99 +6,105 @@ from fastapi import APIRouter, Depends, Query
 
 from backend.dependencies import get_current_user
 from backend.models import User
-from backend.services.complaint_processor import ComplaintProcessor
+from backend.services.ticket_processor import TicketProcessor
 from backend.utils import convert_numpy
 
 router = APIRouter()
 
-# Global processor instance (set in main.py)
-_processor: Optional[ComplaintProcessor] = None
+_processor: Optional[TicketProcessor] = None
 
 
-def get_processor() -> ComplaintProcessor:
+def get_processor() -> TicketProcessor:
     return _processor
 
 
-def set_processor(p: ComplaintProcessor):
+def set_processor(p: TicketProcessor):
     global _processor
     _processor = p
 
 
 @router.get("/summary")
 async def get_summary(user: User = Depends(get_current_user)):
-    """KPI 汇总。"""
     p = get_processor()
     if not p:
         return {}
     return convert_numpy(p.get_summary_kpis())
 
 
-@router.get("/product-lines")
-async def get_product_lines(user: User = Depends(get_current_user)):
-    """产品线分布。"""
+@router.get("/status")
+async def get_status(user: User = Depends(get_current_user)):
     p = get_processor()
     if not p:
         return {'labels': [], 'values': []}
-    return convert_numpy(p.get_product_line_distribution())
+    return convert_numpy(p.get_status_distribution())
 
 
-@router.get("/root-causes")
-async def get_root_causes(user: User = Depends(get_current_user)):
-    """原因大类分布。"""
+@router.get("/service-groups")
+async def get_service_groups(user: User = Depends(get_current_user)):
     p = get_processor()
     if not p:
         return {'labels': [], 'values': []}
-    return convert_numpy(p.get_root_cause_distribution())
+    return convert_numpy(p.get_service_group_distribution())
 
 
-@router.get("/defects/top15")
-async def get_defects_top15(user: User = Depends(get_current_user)):
-    """不良类型 TOP15。"""
+@router.get("/assignees")
+async def get_assignees(user: User = Depends(get_current_user)):
     p = get_processor()
     if not p:
         return {'labels': [], 'values': []}
-    return convert_numpy(p.get_defect_top15())
+    return convert_numpy(p.get_assignee_distribution())
 
 
-@router.get("/cross-table")
-async def get_cross_table(user: User = Depends(get_current_user)):
-    """产品线 × 原因交叉表。"""
-    p = get_processor()
-    if not p:
-        return {'products': [], 'causes': {}}
-    return convert_numpy(p.get_cross_table())
-
-
-@router.get("/key-customers")
-async def get_key_customers(user: User = Depends(get_current_user)):
-    """大客户排名。"""
+@router.get("/departments")
+async def get_departments(user: User = Depends(get_current_user)):
     p = get_processor()
     if not p:
         return {'labels': [], 'values': []}
-    return convert_numpy(p.get_key_customers())
+    return convert_numpy(p.get_department_distribution())
 
 
-@router.get("/mfg-defects")
-async def get_mfg_defects(user: User = Depends(get_current_user)):
-    """制造原因细分。"""
+@router.get("/source-channels")
+async def get_source_channels(user: User = Depends(get_current_user)):
     p = get_processor()
     if not p:
         return {'labels': [], 'values': []}
-    return convert_numpy(p.get_mfg_defect_breakdown())
+    return convert_numpy(p.get_source_channel_distribution())
 
 
-@router.get("/rnd-defects")
-async def get_rnd_defects(user: User = Depends(get_current_user)):
-    """研发原因细分。"""
+@router.get("/fault-groups")
+async def get_fault_groups(user: User = Depends(get_current_user)):
     p = get_processor()
     if not p:
         return {'labels': [], 'values': []}
-    return convert_numpy(p.get_rnd_defect_breakdown())
+    return convert_numpy(p.get_fault_group_distribution())
+
+
+@router.get("/weekly-trend")
+async def get_weekly_trend(user: User = Depends(get_current_user)):
+    p = get_processor()
+    if not p:
+        return {'labels': [], 'values': []}
+    return convert_numpy(p.get_weekly_trend())
+
+
+@router.get("/monthly-trend")
+async def get_monthly_trend(user: User = Depends(get_current_user)):
+    p = get_processor()
+    if not p:
+        return {'labels': [], 'values': []}
+    return convert_numpy(p.get_monthly_trend())
+
+
+@router.get("/evaluation")
+async def get_evaluation(user: User = Depends(get_current_user)):
+    p = get_processor()
+    if not p:
+        return {}
+    return convert_numpy(p.get_evaluation_summary())
 
 
 @router.get("/insights")
 async def get_insights(user: User = Depends(get_current_user)):
-    """洞察建议。"""
     p = get_processor()
     if not p:
         return []

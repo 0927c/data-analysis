@@ -17,7 +17,7 @@ from backend.schemas import (
     ChatMessageRequest, ChatResponse, ChartData,
     SessionOut, MessageOut,
 )
-from backend.services.complaint_processor import ComplaintProcessor
+from backend.services.ticket_processor import TicketProcessor
 from backend.services.conversation_manager import ConversationManager
 from backend.services.intent_parser import IntentParser
 from backend.services.skill_engine import SkillEngine
@@ -33,7 +33,7 @@ router = APIRouter()
 _conversation_manager: Optional[ConversationManager] = None
 _intent_parser: Optional[IntentParser] = None
 _skill_engine: Optional[SkillEngine] = None
-_processor: Optional[ComplaintProcessor] = None
+_processor: Optional[TicketProcessor] = None
 
 
 def get_cm() -> ConversationManager:
@@ -48,11 +48,11 @@ def get_se() -> SkillEngine:
     return _skill_engine
 
 
-def get_cp() -> ComplaintProcessor:
+def get_cp() -> TicketProcessor:
     return _processor
 
 
-def set_globals(cm: ConversationManager, ip: IntentParser, se: SkillEngine, cp: ComplaintProcessor):
+def set_globals(cm: ConversationManager, ip: IntentParser, se: SkillEngine, cp: TicketProcessor):
     global _conversation_manager, _intent_parser, _skill_engine, _processor
     _conversation_manager = cm
     _intent_parser = ip
@@ -121,7 +121,7 @@ async def chat(
         for m in recent_msgs if m.content
     ]
     try:
-        result = await se.execute_skill(intent.get('skill_id', 'complaint_analysis'), intent)
+        result = await se.execute_skill(intent.get('skill_id', 'ticket_analysis'), intent)
     except ValueError as e:
         agent_msg = Message(session_id=session_id, role="assistant", content=str(e))
         db.add(agent_msg)
@@ -223,7 +223,7 @@ async def chat_with_upload(
 
     # 解析 Excel，创建新 processor
     try:
-        new_processor = ComplaintProcessor(str(upload_path))
+        new_processor = TicketProcessor(str(upload_path))
         _ = new_processor.df  # 触发加载
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Excel 解析失败: {e}")

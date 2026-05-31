@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_db
 from backend.dependencies import get_current_user, require_admin
 from backend.models import User, DataSource, Report
-from backend.services.complaint_processor import ComplaintProcessor
+from backend.services.ticket_processor import TicketProcessor
 
 router = APIRouter()
 
@@ -162,8 +162,8 @@ async def upload_excel(
     from backend.services import chart_renderer
 
     try:
-        processor = ComplaintProcessor(str(upload_path))
-        _ = processor.df  # 触发加载和原因分类
+        processor = TicketProcessor(str(upload_path))
+        _ = processor.df  # 触发加载
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Excel 解析失败: {e}")
 
@@ -279,18 +279,19 @@ async def upload_excel(
     }
 
 
-def _build_data_table(processor: ComplaintProcessor, total: int) -> dict:
+def _build_data_table(processor: TicketProcessor, total: int) -> dict:
     """构建数据明细表（前 100 行原始数据 + 汇总行）。"""
     df = processor.df.head(100)
-    headers = ['序号', '产品线', '二级不良', '提取原因', '原因大类']
+    headers = ['序号', '标题', '状态', '请求人', '责任人', '创建时间']
     rows = []
     for i, (_, row) in enumerate(df.iterrows(), start=1):
         rows.append([
             i,
-            str(row.get('产品线', '')),
-            str(row.get('二级不良', '')),
-            str(row.get('提取原因', '')),
-            str(row.get('原因大类', '')),
+            str(row.get('title', '')),
+            str(row.get('status', '')),
+            str(row.get('requester', '')),
+            str(row.get('responsible_person', '')),
+            str(row.get('created_at', '')),
         ])
-    rows.append(['', '', '', '', f'合计: {total} 件 (展示前100行)'])
+    rows.append(['', '', '', '', '', f'合计: {total} 件 (展示前100行)'])
     return {'headers': headers, 'rows': rows}

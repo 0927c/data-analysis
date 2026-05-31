@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
     # Data Source
-    COMPLAINT_EXCEL_PATH: str = ""
+    TICKET_EXCEL_PATH: str = ""
 
     class Config:
         env_file = ".env"

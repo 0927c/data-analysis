@@ -64,7 +64,7 @@ class SkillRouter:
         registry: AgentRegistry,
         tools: list[MCPTool],
         skills_dir: Optional[Path] = None,
-        default_agent_id: str = "complaint-analyst",
+        default_agent_id: str = "ticket-analyst",
     ):
         self._registry = registry
         self._tool_map: dict[str, MCPTool] = {t.name: t for t in tools}

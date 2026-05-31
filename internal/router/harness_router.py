@@ -74,7 +74,7 @@ async def harness_chat(
     response_message = ""
 
     for tool in tools:
-        if tool.name == "complaint_query":
+        if tool.name == "ticket_query":
             query_type = _infer_query_type(req.message)
             result = await tool.execute(query_type=query_type)
             if result.get("status") == "success":
@@ -230,20 +230,40 @@ async def set_memory(key: str, req: MemorySetRequest, request: Request, user: Us
 def _infer_query_type(message: str) -> str:
     """从用户消息推断查询类型。"""
     msg = message.lower()
-    if "产品线" in msg or "product" in msg:
-        return "product_line_distribution"
-    if "原因" in msg and ("分布" in msg or "占比" in msg or "pie" in msg):
-        return "root_cause_distribution"
-    if "top" in msg or "排名" in msg or "bad" in msg:
-        return "defect_top15"
-    if "交叉" in msg or "cross" in msg:
-        return "cross_table"
-    if "客户" in msg or "customer" in msg:
-        return "key_customers"
-    if "制造" in msg or "mfg" in msg:
-        return "mfg_defect_breakdown"
-    if "研发" in msg or "rnd" in msg:
-        return "rnd_defect_breakdown"
+    if "状态" in msg:
+        return "status_distribution"
+    if "服务组" in msg:
+        return "service_group_distribution"
+    if "责任人" in msg or "处理人" in msg:
+        return "assignee_distribution"
+    if "部门" in msg:
+        return "department_distribution"
+    if "来源" in msg or "渠道" in msg:
+        return "source_channel_distribution"
+    if "故障" in msg:
+        return "fault_group_distribution"
+    if "趋势" in msg or "周报" in msg or "weekly" in msg:
+        return "weekly_trend"
+    if "月报" in msg or "monthly" in msg:
+        return "monthly_trend"
+    if "sla" in msg or "达标率" in msg or "时效" in msg:
+        return "sla_weekly_trend"
+    if "挂起" in msg:
+        return "suspended_breakdown"
+    if "评价" in msg or "满意度" in msg:
+        return "evaluation_summary"
+    if "根因" in msg or "根本原因" in msg or "深层" in msg:
+        return "fault_root_cause_analysis"
+    if "重复" in msg or "高频" in msg or "反复" in msg or "同类" in msg:
+        return "recurring_tickets"
+    if "症状" in msg or "方案" in msg or "聚类" in msg:
+        return "symptom_solution_mapping"
+    if "占比" in msg or "性质" in msg:
+        return "nature_trend"
+    if "请求人" in msg or "谁提交" in msg or "组织" in msg:
+        return "requester_behavior"
+    if "运维质量" in msg or "退回率" in msg or "撤单率" in msg:
+        return "ops_quality_metrics"
     if "洞察" in msg or "insight" in msg or "建议" in msg:
         return "insights"
     if "kpi" in msg or "汇总" in msg or "summary" in msg:
@@ -254,10 +274,10 @@ def _infer_query_type(message: str) -> str:
 def _infer_chart_type(message: str) -> str:
     """从用户消息推断图表类型。"""
     msg = message.lower()
-    if "分布" in msg and ("原因" in msg or "cause" in msg):
+    if "趋势" in msg or "tren" in msg or "走势" in msg:
+        return "line"
+    if "分布" in msg or "占比" in msg or "pie" in msg:
         return "pie"
-    if "产品线" in msg or "product" in msg:
-        return "horizontal_bar"
     if "排名" in msg or "top" in msg:
         return "bar"
     if "交叉" in msg or "cross" in msg:
@@ -270,13 +290,24 @@ def _infer_chart_type(message: str) -> str:
 def _generate_response_message(query_type: str, data: dict) -> str:
     """生成人类可读的响应消息。"""
     messages = {
-        "product_line_distribution": "以下是各产品线投诉分布情况：",
-        "root_cause_distribution": "以下是原因大类分布情况：",
-        "defect_top15": "以下是不良类型 TOP15 排名：",
-        "cross_table": "以下是产品线×原因交叉分析：",
-        "key_customers": "以下是大客户投诉排名：",
-        "mfg_defect_breakdown": "以下是制造原因细分：",
-        "rnd_defect_breakdown": "以下是研发原因细分：",
+        "status_distribution": "以下是工单状态分布情况：",
+        "service_group_distribution": "以下是服务组工作量分布：",
+        "assignee_distribution": "以下是责任人处理量排名：",
+        "department_distribution": "以下是请求部门分布：",
+        "source_channel_distribution": "以下是来源渠道分布：",
+        "fault_group_distribution": "以下是故障原因分组：",
+        "weekly_trend": "以下是每周工单趋势：",
+        "monthly_trend": "以下是每月工单趋势：",
+        "sla_weekly_trend": "以下是 SLA 趋势：",
+        "suspended_breakdown": "以下是挂起原因分析：",
+        "evaluation_summary": "以下是满意度评价摘要：",
+        "fault_root_cause_analysis": "以下是故障根因深度分析：",
+        "fault_cause_trend": "以下是故障原因趋势分析：",
+        "symptom_solution_mapping": "以下是症状→解决方案聚类：",
+        "recurring_tickets": "以下是重复工单挖掘结果：",
+        "nature_trend": "以下是各类性质占比与趋势：",
+        "requester_behavior": "以下是请求人行为与组织分析：",
+        "ops_quality_metrics": "以下是运维质量指标分析：",
         "insights": "以下是数据洞察和建议：",
         "summary_kpis": "以下是 KPI 汇总：",
     }
