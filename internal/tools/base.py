@@ -1,5 +1,6 @@
 """MCP 兼容工具基类。每个工具提供 name、description、parameters schema 和 execute()。"""
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 
 

@@ -60,39 +60,54 @@ async def init_db():
             print("✓ 创建默认用户: user / user123")
 
         # 检查是否已有默认数据源
-        result = await session.execute(select(DataSource).where(DataSource.name == "客诉数据"))
+        result = await session.execute(select(DataSource).where(DataSource.name == "工单分析"))
         existing_ds = result.scalar_one_or_none()
 
         if not existing_ds:
             ds = DataSource(
-                name="客诉数据",
+                name="工单分析",
                 type="excel",
-                config='{"path": "' + settings.COMPLAINT_EXCEL_PATH + '"}',
+                config='{"path": "' + settings.TICKET_EXCEL_PATH + '"}',
                 status="active",
                 record_count=0,
             )
             session.add(ds)
-            print("✓ 创建默认数据源: 客诉数据")
+            print("✓ 创建默认数据源: 工单分析")
 
         # 检查是否已有默认 skill
-        result = await session.execute(select(Skill).where(Skill.name == "客诉分析"))
+        result = await session.execute(select(Skill).where(Skill.name == "工单分析"))
         existing_skill = result.scalar_one_or_none()
 
         if not existing_skill:
             skill = Skill(
-                name="客诉分析",
-                description="支持按产品线、原因分类、缺陷类型等维度分析客诉数据",
+                name="工单分析",
+                description="支持按状态、服务组、故障原因等多维度分析工单数据",
                 enabled=True,
                 supported_chart_types='["bar", "pie", "stacked_bar", "horizontal_bar", "rose"]',
             )
             session.add(skill)
-            print("✓ 创建默认 Skill: 客诉分析")
+            print("✓ 创建默认 Skill: 工单分析")
 
+        await session.commit()
+
+    # 重命名旧的"客诉数据"/"客诉分析"记录（如果存在）
+    async with async_session() as session:
+        from sqlalchemy import select
+        result = await session.execute(select(DataSource).where(DataSource.name == "客诉数据"))
+        old_ds = result.scalar_one_or_none()
+        if old_ds:
+            old_ds.name = "工单分析"
+            print("✓ 重命名数据源: 客诉数据 -> 工单分析")
+        result = await session.execute(select(Skill).where(Skill.name == "客诉分析"))
+        old_skill = result.scalar_one_or_none()
+        if old_skill:
+            old_skill.name = "工单分析"
+            print("✓ 重命名 Skill: 客诉分析 -> 工单分析")
         await session.commit()
 
     print("\n✓ 数据库初始化完成")
     print(f"  数据库路径: {settings.DATABASE_URL}")
-    print(f"  数据源路径: {settings.COMPLAINT_EXCEL_PATH}")
+    print(f"  数据源路径: {settings.TICKET_EXCEL_PATH}")
 
 
 if __name__ == "__main__":

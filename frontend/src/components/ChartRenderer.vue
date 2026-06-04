@@ -44,7 +44,7 @@ const showToolbar = ref(props.showToolbar)
 
 function initChart(el, option) {
   if (!el || !option) return
-  const chart = echarts.init(el, 'complaint-dark')
+  const chart = echarts.init(el, 'complaint-light')
   chart.setOption(option, { notMerge: true })
   if (props.onChartClick) {
     chart.on('click', props.onChartClick)
@@ -88,7 +88,7 @@ async function toggleFullscreen() {
     isFullscreen.value = true
     await nextTick()
     if (fullscreenRef.value && props.option) {
-      fullscreenInstance = echarts.init(fullscreenRef.value, 'complaint-dark')
+      fullscreenInstance = echarts.init(fullscreenRef.value, 'complaint-light')
       fullscreenInstance.setOption(props.option, { notMerge: true })
       if (props.onChartClick) {
         fullscreenInstance.on('click', props.onChartClick)
@@ -110,7 +110,7 @@ function downloadPNG() {
   const url = chartInstance.getDataURL({
     type: 'png',
     pixelRatio: 2,
-    backgroundColor: '#1a2837',
+    backgroundColor: '#ffffff',
   })
   const a = document.createElement('a')
   a.href = url
@@ -170,14 +170,14 @@ function downloadPNG() {
 
 .toolbar-btn:hover {
   color: var(--accent);
-  background: rgba(0, 212, 255, 0.1);
+  background: var(--accent-glow);
 }
 
 /* Fullscreen */
 .fullscreen-overlay {
   position: fixed;
   inset: 0;
-  background: var(--bg-overlay);
+  background: rgba(245, 247, 250, 0.92);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;

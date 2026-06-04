@@ -1,5 +1,6 @@
 """LLM Provider 抽象接口。"""
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -26,5 +27,8 @@ def create_llm_provider(provider_type: str, **kwargs) -> LLMProvider:
     elif provider_type == "openai":
         from backend.llm.openai_provider import OpenAIProvider
         return OpenAIProvider(**kwargs)
+    elif provider_type == "flue":
+        from backend.llm.flue_provider import FlueProvider
+        return FlueProvider(**kwargs)
     else:
         raise ValueError(f"不支持的 LLM Provider: {provider_type}")

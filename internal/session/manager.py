@@ -1,5 +1,6 @@
 """SessionManager: CRUD 操作 + append-only JSONL 日志 + Token 消耗追踪。"""
 
+from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path

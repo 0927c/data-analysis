@@ -129,9 +129,9 @@ async function handleToggle(skill) {
 }
 
 .toggle-switch input:checked + .slider {
-  background: rgba(0, 212, 100, 0.15);
-  border-color: #00d464;
-  color: #00d464;
+  background: rgba(76, 175, 125, 0.15);
+  border-color: var(--accent4);
+  color: var(--accent4);
 }
 
 .skill-desc {

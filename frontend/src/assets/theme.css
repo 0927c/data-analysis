@@ -1,45 +1,45 @@
 :root {
   /* ===== 背景层级 ===== */
-  --bg: #0f1923;
-  --bg-deepest: #0a1628;
-  --bg-elevated: #152238;
-  --bg-overlay: rgba(15, 25, 35, 0.8);
+  --bg: #f5f7fa;
+  --bg-deepest: #eef1f5;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(245, 247, 250, 0.85);
 
   /* ===== 卡片表面 ===== */
-  --card-bg: #1a2837;
-  --card-bg-hover: #1f3045;
-  --card-border: #2a3f54;
-  --card-border-hover: rgba(0, 212, 255, 0.3);
-  --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-  --card-shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --card-bg: #ffffff;
+  --card-bg-hover: #f8f9fb;
+  --card-border: #e2e6ed;
+  --card-border-hover: #c5cad4;
+  --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --card-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.1);
 
   /* ===== Glassmorphism ===== */
-  --glass-bg: rgba(26, 40, 55, 0.6);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.06);
   --glass-blur: 12px;
 
   /* ===== 文本 ===== */
-  --text: #e0e8f0;
-  --text-secondary: #8899aa;
-  --text-tertiary: #5a6a7a;
-  --text-inverse: #0f1923;
+  --text: #1a2332;
+  --text-secondary: #5a6a7a;
+  --text-tertiary: #9aa8b8;
+  --text-inverse: #ffffff;
 
-  /* ===== 主色 ===== */
-  --accent: #00d4ff;
-  --accent-hover: #33dfff;
-  --accent-glow: rgba(0, 212, 255, 0.2);
-  --accent2: #ff6b6b;
-  --accent3: #ffd93d;
-  --accent4: #6bcb77;
-  --accent5: #9b59b6;
+  /* ===== 主色 - 柔和调色板 ===== */
+  --accent: #4f8cf7;
+  --accent-hover: #6ba0f9;
+  --accent-glow: rgba(79, 140, 247, 0.15);
+  --accent2: #e8634a;
+  --accent3: #f5a623;
+  --accent4: #4caf7d;
+  --accent5: #8b6cd6;
 
   /* ===== 渐变 ===== */
-  --gradient1: linear-gradient(135deg, #00d4ff, #0078d4);
-  --gradient2: linear-gradient(135deg, #ff6b6b, #ee5a24);
-  --gradient3: linear-gradient(135deg, #ffd93d, #f0a500);
-  --gradient4: linear-gradient(135deg, #6bcb77, #00b894);
-  --gradient5: linear-gradient(135deg, #9b59b6, #8e44ad);
-  --gradient-card: linear-gradient(135deg, #1a2837 0%, #152238 100%);
+  --gradient1: linear-gradient(135deg, #4f8cf7, #3b6fd4);
+  --gradient2: linear-gradient(135deg, #e8634a, #d4563e);
+  --gradient3: linear-gradient(135deg, #f5a623, #e0961a);
+  --gradient4: linear-gradient(135deg, #4caf7d, #3d9b6c);
+  --gradient5: linear-gradient(135deg, #8b6cd6, #7a5ec4);
+  --gradient-card: linear-gradient(135deg, #ffffff 0%, #f8f9fb 100%);
 
   /* ===== 排版尺度 ===== */
   --font-size-xs: 11px;
@@ -98,9 +98,6 @@
 
 body {
   background: var(--bg);
-  background-image:
-    radial-gradient(ellipse 80% 60% at 20% 50%, rgba(0, 212, 255, 0.04) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 50% at 80% 20%, rgba(155, 89, 182, 0.03) 0%, transparent 70%);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: var(--font-size-base);

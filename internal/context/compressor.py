@@ -1,5 +1,6 @@
 """ContextCompressor: Token 感知上下文压缩，支持 LLM 和规则两种策略。"""
 
+from __future__ import annotations
 from typing import Optional
 
 from backend.llm.base import LLMProvider

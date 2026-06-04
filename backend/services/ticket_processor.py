@@ -1,5 +1,6 @@
 """工单数据处理服务 — 从 Excel 读取 ITSM 工单数据，提供多维度统计分析。"""
 
+from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -797,7 +798,7 @@ class TicketProcessor:
                 })
 
         # 6. 评价参与率
-        if kpis['eval_count'] > 0:
+        if kpis['evaluated_count'] > 0:
             if kpis['evaluated_ratio'] < 30:
                 insights.append({
                     'severity': 'info',

@@ -77,9 +77,9 @@ defineProps({
 .skeleton-line {
   background: linear-gradient(
     90deg,
-    var(--card-bg) 25%,
-    rgba(255, 255, 255, 0.05) 50%,
-    var(--card-bg) 75%
+    var(--bg-deepest) 25%,
+    var(--card-bg) 50%,
+    var(--bg-deepest) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;

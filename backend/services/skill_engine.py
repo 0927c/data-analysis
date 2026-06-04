@@ -1,5 +1,6 @@
 """Skill 执行引擎：注册、分发、执行工单分析技能。"""
 
+from __future__ import annotations
 import json
 import os
 import re
@@ -729,7 +730,10 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
 
         messages.append({"role": "user", "content": user_message})
 
-        response = await self.llm.chat_completion(messages, temperature=0.7, max_tokens=1536)
+        try:
+            response = await self.llm.chat_completion(messages, temperature=0.7, max_tokens=2048)
+        except Exception:
+            response = "抱歉，我暂时无法回答这个问题，请稍后再试。"
 
         return {
             'message': response,

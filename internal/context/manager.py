@@ -1,5 +1,6 @@
 """ContextManager: 包装 ConversationManager，添加 token 感知消息历史管理与 Context Rot 防御。"""
 
+from __future__ import annotations
 import json
 from typing import Optional
 

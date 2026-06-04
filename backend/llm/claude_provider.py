@@ -1,5 +1,6 @@
 """Claude API Provider 适配器。"""
 
+from __future__ import annotations
 from typing import Optional
 
 from anthropic import AsyncAnthropic

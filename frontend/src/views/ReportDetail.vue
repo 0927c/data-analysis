@@ -244,13 +244,13 @@ async function doExportExcel() {
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
-  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(79, 140, 247, 0.2);
   transition: all var(--transition-base) var(--ease-out);
 }
 
 .btn-export:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(79, 140, 247, 0.3);
 }
 
 .btn-export:disabled {
@@ -331,7 +331,7 @@ async function doExportExcel() {
 .tab-badge {
   display: inline-block;
   font-size: var(--font-size-xs);
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(79, 140, 247, 0.1);
   color: var(--accent);
   padding: 1px 6px;
   border-radius: var(--radius-full);
@@ -381,7 +381,7 @@ async function doExportExcel() {
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   animation: insightSlideIn var(--transition-slow) var(--ease-out) both;
-  background: rgba(0, 212, 255, 0.04);
+  background: rgba(79, 140, 247, 0.04);
   border: 1px solid var(--card-border);
   transition: border-color var(--transition-base);
 }
@@ -402,7 +402,7 @@ async function doExportExcel() {
 
 .insight-item.severity-info {
   border-left: 3px solid var(--accent);
-  background: rgba(0, 212, 255, 0.04);
+  background: rgba(79, 140, 247, 0.04);
 }
 
 .insight-severity-dot {
@@ -442,7 +442,7 @@ async function doExportExcel() {
 }
 
 .severity-badge.info {
-  background: rgba(0, 212, 255, 0.12);
+  background: rgba(79, 140, 247, 0.12);
   color: var(--accent);
 }
 
@@ -503,7 +503,7 @@ tbody tr {
 }
 
 tbody tr:hover {
-  background: rgba(0, 212, 255, 0.04);
+  background: rgba(79, 140, 247, 0.04);
 }
 
 /* Export Modal */

@@ -57,8 +57,8 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   background:
-    radial-gradient(ellipse 60% 50% at 30% 60%, rgba(0, 212, 255, 0.06) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 40% at 70% 30%, rgba(155, 89, 182, 0.04) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 50% at 30% 60%, rgba(79, 140, 247, 0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 70% 30%, rgba(139, 108, 214, 0.04) 0%, transparent 70%),
     var(--bg);
   animation: bgShift 8s ease-in-out infinite alternate;
 }
@@ -122,13 +122,14 @@ async function handleLogin() {
   width: 100%;
   padding: var(--space-md);
   border-radius: var(--radius-md);
-  background: rgba(26, 40, 55, 0.5);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
   transition: all var(--transition-fast);
 }
 
 .field input:focus {
   box-shadow: 0 0 0 3px var(--accent-glow);
-  background: rgba(26, 40, 55, 0.7);
+  border-color: var(--accent);
 }
 
 .error {
@@ -150,13 +151,13 @@ async function handleLogin() {
   font-weight: var(--font-weight-semibold);
   border-radius: var(--radius-md);
   margin-top: var(--space-sm);
-  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(79, 140, 247, 0.3);
   transition: all var(--transition-base) var(--ease-out);
 }
 
 .btn-login:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(0, 212, 255, 0.4);
+  box-shadow: 0 6px 24px rgba(79, 140, 247, 0.4);
 }
 
 .btn-login:disabled {

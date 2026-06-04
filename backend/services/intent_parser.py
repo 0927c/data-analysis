@@ -1,5 +1,6 @@
 """LLM 驱动的意图解析器 + 规则引擎 fallback — 工单分析版本。"""
 
+from __future__ import annotations
 import json
 import re
 from typing import Optional
@@ -26,7 +27,7 @@ INTENT_GROUP_MAP = {
     '来源': 'source_channel', '渠道': 'source_channel',
     '故障原因': 'fault_group', '故障分组': 'fault_group',
     '原因类别': 'cause_category', '原因': 'cause_category',
-    '业务系统': 'business_system', '模块': 'business_system',
+    '业务系统': 'business_system', '模块': 'business_system', '系统': 'business_system',
     '解决人': 'resolver', '解决': 'resolver',
     '挂起': 'suspended', '挂起原因': 'suspended',
     '性质': 'nature',
@@ -171,17 +172,18 @@ class IntentParser:
                            '多少件', '多少个', '有几件', '有几个', '是多少', '有多少']
         ticket_keywords = ['工单', '状态', '服务组', '责任人', '部门', '来源', '故障',
                           'SLA', '挂起', '评价', '解决', '趋势', '排名', '占比', '分布',
-                          '分析', '报表', '周报', '月报']
+                          '分析', '报表', '周报', '月报', '系统', '业务', '模块']
         is_explain_question = any(kw in msg for kw in explain_keywords)
         is_ticket = any(kw in msg for kw in ticket_keywords)
 
+        # 包含工单相关关键词且有明确数据查询意图（多少/几个）→ 走工单分析，不走闲聊
         if is_explain_question and is_ticket:
             return {
-                'skill_id': 'chitchat',
-                'action': 'chitchat',
+                'skill_id': 'ticket_analysis',
                 'filters': filters,
-                'group_by': '',
-                'chart_type': '',
+                'group_by': group_by,
+                'chart_type': chart_type,
+                'action': 'query',
             }
 
         if not is_ticket and not filters:

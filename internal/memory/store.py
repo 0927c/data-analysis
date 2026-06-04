@@ -1,5 +1,6 @@
 """MemoryStore: 文件 KV 存储 + markdown agent context（AGENTS.md 模式）。"""
 
+from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Optional

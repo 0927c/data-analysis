@@ -1,5 +1,6 @@
 """TicketQueryTool: 包装 TicketProcessor 为 MCP 工具。"""
 
+from __future__ import annotations
 from typing import Optional
 
 from internal.tools.base import MCPTool

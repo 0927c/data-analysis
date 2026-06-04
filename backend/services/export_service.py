@@ -1,5 +1,6 @@
 """报表导出服务：HTML / Excel 导出。"""
 
+from __future__ import annotations
 import json
 from io import BytesIO
 from datetime import datetime
@@ -123,7 +124,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 <div class="header">
   <h1>{{ title }}<span>报告</span></h1>
-  <div class="subtitle">数据来源：客诉数据 | 生成日期：{{ generated_at }} | 总计 {{ total }} 件投诉</div>
+  <div class="subtitle">数据来源：工单分析 | 生成日期：{{ generated_at }} | 总计 {{ total }} 件工单</div>
 </div>
 <div class="layout">
 <nav class="toc">
@@ -308,11 +309,9 @@ def export_excel(
     ws0['A4'].font = Font(name='Microsoft YaHei', bold=True, size=14, color='e0e8f0')
 
     kpi_items = [
-        ('总投诉数', kpis.get('total', 0)),
-        ('产品线数', kpis.get('product_line_count', 0)),
-        ('原因不明', f'{kpis.get("unknown_count", 0)}件 ({kpis.get("unknown_ratio", 0)}%)'),
-        ('TOP缺陷', f'{kpis.get("top_defect", "N/A")} ({kpis.get("top_defect_count", 0)}件)'),
-        ('大客户投诉', f'{kpis.get("key_customer_count", 0)}件 ({kpis.get("key_customer_ratio", 0)}%)'),
+        ('总工单数', kpis.get('total', 0)),
+        ('SLA达标率', f'{kpis.get("sla_ratio", 0)}%'),
+        ('平均解决时间', f'{kpis.get("avg_resolution_days", 0)}天'),
     ]
     for i, (label, val) in enumerate(kpi_items, start=5):
         ws0.cell(row=i, column=1, value=label).font = BODY_FONT
@@ -337,11 +336,9 @@ def export_excel(
     # ── Sheet 2: KPI汇总 ───────────────────────────────
     ws2 = wb.create_sheet('KPI汇总')
     ws2.append(['指标', '值'])
-    ws2.append(['总投诉数', kpis.get('total', 0)])
-    ws2.append(['产品线数', kpis.get('product_line_count', 0)])
-    ws2.append(['原因不明', f'{kpis.get("unknown_count", 0)}件 ({kpis.get("unknown_ratio", 0)}%)'])
-    ws2.append(['TOP缺陷', f'{kpis.get("top_defect", "N/A")} ({kpis.get("top_defect_count", 0)}件)'])
-    ws2.append(['大客户投诉', f'{kpis.get("key_customer_count", 0)}件 ({kpis.get("key_customer_ratio", 0)}%)'])
+    ws2.append(['总工单数', kpis.get('total', 0)])
+    ws2.append(['SLA达标率', f'{kpis.get("sla_ratio", 0)}%'])
+    ws2.append(['平均解决时间', f'{kpis.get("avg_resolution_days", 0)}天'])
     _style_header_row(ws2, 2)
     _style_data_rows(ws2, 7, 2)
     ws2.column_dimensions['A'].width = 16

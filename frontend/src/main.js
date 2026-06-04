@@ -5,23 +5,23 @@ import App from './App.vue'
 import router from './router/index.js'
 import './assets/theme.css'
 
-// ECharts 暗色主题
-echarts.registerTheme('complaint-dark', {
-  color: ['#00d4ff', '#ff6b6b', '#ffd93d', '#6bcb77', '#9b59b6', '#e67e22', '#1abc9c', '#e74c3c'],
+// ECharts 浅色主题
+echarts.registerTheme('complaint-light', {
+  color: ['#4f8cf7', '#e8634a', '#f5a623', '#4caf7d', '#8b6cd6', '#26a69a', '#ef6c9e', '#5c6bc0'],
   backgroundColor: 'transparent',
-  textStyle: { color: '#e0e8f0' },
+  textStyle: { color: '#1a2332' },
   tooltip: {
-    backgroundColor: 'rgba(26, 40, 55, 0.95)',
-    borderColor: '#2a3f54',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderColor: '#e2e6ed',
     borderWidth: 1,
-    textStyle: { color: '#e0e8f0', fontSize: 13 },
+    textStyle: { color: '#1a2332', fontSize: 13 },
     padding: [10, 14],
-    extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.3); border-radius: 8px;',
+    extraCssText: 'box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-radius: 8px;',
   },
-  axisLine: { lineStyle: { color: '#2a3f54' } },
-  axisLabel: { color: '#8899aa' },
-  splitLine: { lineStyle: { color: '#1a2f44' } },
-  legend: { textStyle: { color: '#e0e8f0' } },
+  axisLine: { lineStyle: { color: '#e2e6ed' } },
+  axisLabel: { color: '#5a6a7a' },
+  splitLine: { lineStyle: { color: '#eef1f5' } },
+  legend: { textStyle: { color: '#1a2332' } },
   grid: { containLabel: true },
 })
 

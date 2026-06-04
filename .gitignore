@@ -44,6 +44,14 @@ Thumbs.db
 frontend/node_modules/
 frontend/dist/
 
+# Flue Agent
+flue-agent/node_modules/
+
+# Data files
+*.xlsx
+test_*.py
+test_*.json
+
 # Claude settings (local)
 .claude/settings.local.json
 

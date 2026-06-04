@@ -1,0 +1,12 @@
+{
+  "name": "flue-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node agent-server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "openai": "^4.104.0"
+  }
+}

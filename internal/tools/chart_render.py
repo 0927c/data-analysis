@@ -1,5 +1,6 @@
 """ChartRenderTool: 包装 ChartRenderer 函数为 MCP 工具。"""
 
+from __future__ import annotations
 from internal.tools.base import MCPTool
 from backend.services.chart_renderer import (
     render_pie, render_bar, render_stacked_bar,

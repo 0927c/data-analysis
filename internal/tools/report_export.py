@@ -1,5 +1,6 @@
 """ReportExportTool: 包装 ExportService 为 MCP 工具。"""
 
+from __future__ import annotations
 from internal.tools.base import MCPTool
 from backend.services.export_service import export_html, export_excel
 

@@ -74,8 +74,8 @@ defineEmits(['save'])
 }
 
 .user-text {
-  background: rgba(0, 212, 255, 0.15);
-  border: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(79, 140, 247, 0.1);
+  border: 1px solid rgba(79, 140, 247, 0.18);
   padding: 12px 16px;
   border-radius: 12px 12px 0 12px;
   font-size: 14px;
@@ -112,7 +112,7 @@ defineEmits(['save'])
 }
 
 .insight-chip {
-  background: rgba(0, 212, 255, 0.06);
+  background: rgba(79, 140, 247, 0.06);
   border-left: 3px solid var(--accent);
   padding: 8px 12px;
   margin-bottom: 6px;

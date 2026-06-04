@@ -53,8 +53,8 @@
           <button class="btn-delete" @click="handleDelete(report.id)">&times;</button>
         </div>
         <div class="card-meta">
-          <span class="meta-tag">{{ report.datasource_name || '客诉数据' }}</span>
-          <span class="meta-tag">{{ report.skill_name || '客诉分析' }}</span>
+          <span class="meta-tag">{{ report.datasource_name || '工单分析' }}</span>
+          <span class="meta-tag">{{ report.skill_name || '工单分析' }}</span>
         </div>
         <div class="card-stats">
           <span>{{ report.chart_count || 0 }} 张图表</span>
@@ -227,13 +227,13 @@ function formatDate(dateStr) {
   text-decoration: none;
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-semibold);
-  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(79, 140, 247, 0.2);
   transition: all var(--transition-base) var(--ease-out);
 }
 
 .btn-new:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(79, 140, 247, 0.3);
 }
 
 /* Filter chips */
@@ -259,7 +259,7 @@ function formatDate(dateStr) {
 }
 
 .filter-chip.active {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(79, 140, 247, 0.1);
   border-color: var(--accent);
   color: var(--accent);
   font-weight: var(--font-weight-medium);
@@ -362,7 +362,7 @@ function formatDate(dateStr) {
 
 .meta-tag {
   font-size: var(--font-size-xs);
-  background: rgba(0, 212, 255, 0.08);
+  background: rgba(79, 140, 247, 0.08);
   color: var(--accent);
   padding: 2px var(--space-sm);
   border-radius: var(--radius-sm);
@@ -400,7 +400,7 @@ function formatDate(dateStr) {
 .btn-view:hover, .btn-export:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(0, 212, 255, 0.05);
+  background: rgba(79, 140, 247, 0.05);
 }
 
 .pagination {

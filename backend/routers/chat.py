@@ -1,10 +1,11 @@
 """Agent 对话路由。"""
 
+from __future__ import annotations
 import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy import select
@@ -88,14 +89,17 @@ async def chat(
     # 保存用户消息
     user_msg = Message(session_id=session_id, role="user", content=req.message)
     db.add(user_msg)
-    await db.flush()  # 确保当前消息拿到ID，后续查询可排除
+    await db.flush()
 
     # 加载上下文
     cm.load_state(session_id, session.context_state)
     ctx = cm.get_context(session_id)
 
     # 检查重置命令
-    intent = await ip.parse(req.message, ctx, se.get_available_skills())
+    try:
+        intent = await ip.parse(req.message, ctx, se.get_available_skills())
+    except Exception:
+        intent = ip._parse_with_rules(req.message, ctx)
     if intent.get('action') == 'reset_context':
         cm.reset_context(session_id)
         ctx = cm.get_context(session_id)
@@ -106,9 +110,7 @@ async def chat(
         ctx = cm.update_context(session_id, intent['filters'])
 
     # 执行 skill
-    # chitchat 需要原始消息和历史对话
     intent['message'] = req.message
-    # 加载最近对话历史（最多取6条 = 3轮对话，排除当前消息）
     history_result = await db.execute(
         select(Message)
         .where(Message.session_id == session_id, Message.id < user_msg.id)
@@ -127,6 +129,11 @@ async def chat(
         db.add(agent_msg)
         await db.commit()
         return ChatResponse(message=str(e), session_id=session_id)
+    except Exception as e:
+        agent_msg = Message(session_id=session_id, role="assistant", content=f"抱歉，处理你的请求时遇到了问题，请稍后再试。")
+        db.add(agent_msg)
+        await db.commit()
+        return ChatResponse(message=agent_msg.content, session_id=session_id)
 
     # 闲聊分支：不需要生成报表
     is_chitchat = intent.get('action') == 'chitchat' or intent.get('skill_id') == 'chitchat'
@@ -144,7 +151,7 @@ async def chat(
         await db.commit()
         return ChatResponse(message=agent_content, session_id=session_id)
 
-    # 投诉分析分支：生成报表
+    # 工单分析分支：生成报表
     report_data = assemble_report(
         title=req.message[:100],
         charts=result['charts'],
@@ -271,86 +278,76 @@ async def chat_with_upload(
     user_msg = Message(session_id=session_id, role="user", content=f"[上传文件] {filename}\n{message}")
     db.add(user_msg)
 
-    # 上传后生成完整分析报表（与数据源管理页面一致）
+    # 上传后生成完整分析报表
     from backend.services import chart_renderer
 
     charts = []
 
-    # 1. 产品线分布
-    pl = new_processor.get_product_line_distribution()
-    charts.append({
-        'id': 'product_line',
-        'title': '各产品线投诉量排名',
-        'type': 'horizontal_bar',
-        'option': chart_renderer.render_horizontal_bar(pl['labels'], pl['values']),
-    })
-
-    # 2. 原因大类分布
-    rc = new_processor.get_root_cause_distribution()
-    charts.append({
-        'id': 'root_cause',
-        'title': '投诉原因大类分布',
-        'type': 'pie',
-        'option': chart_renderer.render_pie(rc['labels'], rc['values']),
-    })
-
-    # 3. 二级不良 TOP15
-    d15 = new_processor.get_defect_top15(filters=None, top_n=15)
-    charts.append({
-        'id': 'defect_top15',
-        'title': '二级不良类型 TOP15',
-        'type': 'bar',
-        'option': chart_renderer.render_bar(d15['labels'], d15['values'], True),
-    })
-
-    # 4. 产品线 × 原因交叉
-    ct = new_processor.get_cross_table(filters=None)
-    charts.append({
-        'id': 'cross_table',
-        'title': '产品线 × 原因大类交叉分析',
-        'type': 'stacked_bar',
-        'option': chart_renderer.render_stacked_bar(ct['products'], ct['causes']),
-    })
-
-    # 5. 大客户投诉
-    kc = new_processor.get_key_customers(filters=None)
-    if kc['labels']:
+    if 'status' in new_processor.df.columns:
+        sd = new_processor.get_status_distribution()
         charts.append({
-            'id': 'key_customers',
-            'title': '大客户投诉排名',
-            'type': 'horizontal_bar',
-            'option': chart_renderer.render_horizontal_bar(kc['labels'], kc['values']),
+            'id': 'status',
+            'title': '工单状态分布',
+            'type': 'pie',
+            'option': chart_renderer.render_pie(sd['labels'], sd['values']),
         })
 
-    # 6-9. 各原因大类细分
-    breakdowns = [
-        ('mfg_breakdown', '制造原因细分', new_processor.get_mfg_defect_breakdown),
-        ('rnd_breakdown', '研发原因细分', new_processor.get_rnd_defect_breakdown),
-        ('cli_breakdown', '客户原因细分', new_processor.get_cli_defect_breakdown),
-        ('wh_breakdown', '仓储原因细分', new_processor.get_wh_defect_breakdown),
-    ]
-    for cid, ctitle, func in breakdowns:
-        bd = func()
-        if bd['labels']:
-            charts.append({
-                'id': cid,
-                'title': ctitle,
-                'type': 'rose',
-                'option': chart_renderer.render_rose(bd['labels'], bd['values']),
-            })
+    if 'service_group' in new_processor.df.columns:
+        sg = new_processor.get_service_group_distribution()
+        charts.append({
+            'id': 'service_group',
+            'title': '服务组工单量排名',
+            'type': 'horizontal_bar',
+            'option': chart_renderer.render_horizontal_bar(sg['labels'], sg['values']),
+        })
 
-    # 洞察
-    insights = new_processor.generate_insights()
-    kpis = new_processor.get_summary_kpis()
+    if 'business_system' in new_processor.df.columns:
+        bs = new_processor.get_business_system_distribution()
+        charts.append({
+            'id': 'business_system',
+            'title': '业务系统分布',
+            'type': 'horizontal_bar',
+            'option': chart_renderer.render_horizontal_bar(bs['labels'], bs['values']),
+        })
 
-    # 数据表
+    if 'fault_group' in new_processor.df.columns:
+        fg = new_processor.get_fault_group_distribution()
+        charts.append({
+            'id': 'fault_group',
+            'title': '故障原因分组',
+            'type': 'pie',
+            'option': chart_renderer.render_pie(fg['labels'], fg['values']),
+        })
+
+    if 'created_week' in new_processor.df.columns:
+        wt = new_processor.get_weekly_trend()
+        charts.append({
+            'id': 'weekly_trend',
+            'title': '每周工单趋势',
+            'type': 'line',
+            'option': chart_renderer.render_line(wt['labels'], [{'name': '工单数', 'data': wt['values']}]),
+        })
+
+    if 'assignee' in new_processor.df.columns:
+        ad = new_processor.get_assignee_distribution()
+        charts.append({
+            'id': 'assignee',
+            'title': '责任人处理量 TOP15',
+            'type': 'horizontal_bar',
+            'option': chart_renderer.render_horizontal_bar(ad['labels'], ad['values']),
+        })
+
+    # 洞察 + KPI + 数据表
+    insights = new_processor.get_summary_kpis()
+    kpis = insights
+
     df_top = new_processor.df.head(100)
     data_table = {
-        'headers': ['序号', '产品线', '二级不良', '提取原因', '原因大类'],
+        'headers': ['序号', '标题', '状态', '请求人', '责任人', '服务组', '创建时间'],
         'rows': [
-            [i, str(r.get('产品线', '')), str(r.get('二级不良', '')), str(r.get('提取原因', '')), str(r.get('原因大类', ''))]
+            [i, str(r.get('title', '')), str(r.get('status', '')), str(r.get('requester', '')), str(r.get('responsible_person', '')), str(r.get('service_group', '')), str(r.get('created_at', ''))]
             for i, (_, r) in enumerate(df_top.iterrows(), start=1)
-        ] + [['', '', '', '', f'合计: {total} 件 (展示前100行)']],
+        ] + [['', '', '', '', '', '', f'合计: {total} 件 (展示前100行)']],
     }
 
     result = {
@@ -415,7 +412,7 @@ async def chat_with_upload(
     )
 
 
-@router.get("/sessions", response_model=list[SessionOut])
+@router.get("/sessions", response_model=List[SessionOut])
 async def get_sessions(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """获取用户会话列表。"""
     result = await db.execute(
@@ -426,7 +423,7 @@ async def get_sessions(user: User = Depends(get_current_user), db: AsyncSession 
     return result.scalars().all()
 
 
-@router.get("/sessions/{session_id}/messages", response_model=list[MessageOut])
+@router.get("/sessions/{session_id}/messages", response_model=List[MessageOut])
 async def get_messages(
     session_id: int,
     user: User = Depends(get_current_user),

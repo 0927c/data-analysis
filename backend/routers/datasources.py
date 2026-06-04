@@ -185,68 +185,57 @@ async def upload_excel(
     # 生成图表数据
     charts = []
 
-    # 1. 产品线分布
-    pl = processor.get_product_line_distribution()
-    charts.append(_build_chart(
-        chart_renderer.render_horizontal_bar, 'horizontal_bar',
-        'product_line', '各产品线投诉量排名',
-        pl['labels'], pl['values'],
-    ))
-
-    # 2. 原因大类分布
-    rc = processor.get_root_cause_distribution()
-    charts.append(_build_chart(
-        chart_renderer.render_pie, 'pie',
-        'root_cause', '投诉原因大类分布',
-        rc['labels'], rc['values'],
-    ))
-
-    # 3. 二级不良 TOP15
-    d15 = processor.get_defect_top15()
-    charts.append(_build_chart(
-        chart_renderer.render_bar, 'bar',
-        'defect_top15', '二级不良类型 TOP15',
-        d15['labels'], d15['values'], True,
-    ))
-
-    # 4. 产品线 × 原因交叉
-    ct = processor.get_cross_table()
-    charts.append(_build_chart(
-        chart_renderer.render_stacked_bar, 'stacked_bar',
-        'cross_table', '产品线 × 原因大类交叉分析',
-        ct['products'], ct['causes'],
-    ))
-
-    # 5. 大客户投诉
-    kc = processor.get_key_customers()
-    if kc['labels']:
+    if 'status' in processor.df.columns:
+        sd = processor.get_status_distribution()
         charts.append(_build_chart(
-            chart_renderer.render_horizontal_bar, 'horizontal_bar',
-            'key_customers', '大客户投诉排名',
-            kc['labels'], kc['values'],
+            chart_renderer.render_pie, 'pie',
+            'status', '工单状态分布',
+            sd['labels'], sd['values'],
         ))
 
-    # 6-9. 各原因大类细分（玫瑰图）
-    breakdowns = [
-        ('mfg_breakdown', '制造原因细分', processor.get_mfg_defect_breakdown),
-        ('rnd_breakdown', '研发原因细分', processor.get_rnd_defect_breakdown),
-        ('cli_breakdown', '客户原因细分', processor.get_cli_defect_breakdown),
-        ('wh_breakdown', '仓储原因细分', processor.get_wh_defect_breakdown),
-    ]
-    for cid, ctitle, func in breakdowns:
-        bd = func()
-        if bd['labels']:
-            charts.append(_build_chart(
-                chart_renderer.render_rose, 'rose',
-                cid, ctitle,
-                bd['labels'], bd['values'],
-            ))
+    if 'service_group' in processor.df.columns:
+        sg = processor.get_service_group_distribution()
+        charts.append(_build_chart(
+            chart_renderer.render_horizontal_bar, 'horizontal_bar',
+            'service_group', '服务组工单量排名',
+            sg['labels'], sg['values'],
+        ))
 
-    # 生成洞察
-    insights = processor.generate_insights()
+    if 'business_system' in processor.df.columns:
+        bs = processor.get_business_system_distribution()
+        charts.append(_build_chart(
+            chart_renderer.render_horizontal_bar, 'horizontal_bar',
+            'business_system', '业务系统分布',
+            bs['labels'], bs['values'],
+        ))
 
-    # 生成 KPI + 数据表
-    kpis = processor.get_summary_kpis()
+    if 'fault_group' in processor.df.columns:
+        fg = processor.get_fault_group_distribution()
+        charts.append(_build_chart(
+            chart_renderer.render_pie, 'pie',
+            'fault_group', '故障原因分组',
+            fg['labels'], fg['values'],
+        ))
+
+    if 'created_week' in processor.df.columns:
+        wt = processor.get_weekly_trend()
+        charts.append(_build_chart(
+            chart_renderer.render_line, 'line',
+            'weekly_trend', '每周工单趋势',
+            wt['labels'], [{'name': '工单数', 'data': wt['values']}],
+        ))
+
+    if 'assignee' in processor.df.columns:
+        ad = processor.get_assignee_distribution()
+        charts.append(_build_chart(
+            chart_renderer.render_horizontal_bar, 'horizontal_bar',
+            'assignee', '责任人处理量 TOP15',
+            ad['labels'], ad['values'],
+        ))
+
+    # 生成洞察 + KPI + 数据表
+    insights = processor.get_summary_kpis()
+    kpis = insights
     data_table = _build_data_table(processor, total)
 
     # 创建 Report
@@ -282,7 +271,7 @@ async def upload_excel(
 def _build_data_table(processor: TicketProcessor, total: int) -> dict:
     """构建数据明细表（前 100 行原始数据 + 汇总行）。"""
     df = processor.df.head(100)
-    headers = ['序号', '标题', '状态', '请求人', '责任人', '创建时间']
+    headers = ['序号', '标题', '状态', '请求人', '责任人', '服务组', '创建时间']
     rows = []
     for i, (_, row) in enumerate(df.iterrows(), start=1):
         rows.append([
@@ -291,7 +280,8 @@ def _build_data_table(processor: TicketProcessor, total: int) -> dict:
             str(row.get('status', '')),
             str(row.get('requester', '')),
             str(row.get('responsible_person', '')),
+            str(row.get('service_group', '')),
             str(row.get('created_at', '')),
         ])
-    rows.append(['', '', '', '', '', f'合计: {total} 件 (展示前100行)'])
+    rows.append(['', '', '', '', '', '', f'合计: {total} 件 (展示前100行)'])
     return {'headers': headers, 'rows': rows}

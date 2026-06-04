@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     LLM_OPENAI_MODEL: str = "qwen2.5-7b-instruct"
     LLM_OPENAI_API_KEY: str = ""
 
+    # Flue Agent
+    FLUE_AGENT_URL: str = "http://localhost:3002"
+    FLUE_AGENT_ENABLED: bool = False
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 

@@ -1,5 +1,6 @@
 """将结构化数据转为 ECharts option JSON，替代 AntV Studio 外部 API。"""
 
+from __future__ import annotations
 from typing import Optional
 
 

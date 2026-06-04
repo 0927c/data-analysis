@@ -1,5 +1,6 @@
 """报表生成器：组装图表 + 洞察 + 数据为完整报告。"""
 
+from __future__ import annotations
 import json
 
 from backend.utils import convert_numpy

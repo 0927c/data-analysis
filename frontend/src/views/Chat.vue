@@ -220,7 +220,7 @@ function initChart(el, option) {
   if (chartInstances.has(el)) {
     chartInstances.get(el).dispose()
   }
-  const chart = echarts.init(el, 'complaint-dark')
+  const chart = echarts.init(el, 'complaint-light')
   chart.setOption(option)
   chartInstances.set(el, chart)
   const resizeHandler = () => chart.resize()
@@ -477,13 +477,13 @@ watch(() => chatStore.messages.length, () => {
   font-weight: var(--font-weight-semibold);
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
-  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(79, 140, 247, 0.2);
   transition: all var(--transition-base) var(--ease-out);
 }
 
 .btn-new:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(79, 140, 247, 0.3);
 }
 
 .btn-toggle {
@@ -496,7 +496,7 @@ watch(() => chatStore.messages.length, () => {
 }
 
 .btn-toggle:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.04);
   color: var(--text);
 }
 
@@ -519,13 +519,13 @@ watch(() => chatStore.messages.length, () => {
 }
 
 .session-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.03);
   transform: translateX(2px);
 }
 
 .session-item.active {
-  background: rgba(0, 212, 255, 0.08);
-  border-color: rgba(0, 212, 255, 0.2);
+  background: rgba(79, 140, 247, 0.08);
+  border-color: rgba(79, 140, 247, 0.2);
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
@@ -703,9 +703,9 @@ watch(() => chatStore.messages.length, () => {
 
 .quick-questions button:hover {
   border-color: var(--accent);
-  background: rgba(0, 212, 255, 0.05);
+  background: rgba(79, 140, 247, 0.05);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(79, 140, 247, 0.1);
 }
 
 /* Messages */
@@ -766,12 +766,12 @@ watch(() => chatStore.messages.length, () => {
 }
 
 .user-text {
-  background: rgba(0, 212, 255, 0.12);
-  border: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(79, 140, 247, 0.1);
+  border: 1px solid rgba(79, 140, 247, 0.18);
   padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-lg) var(--radius-lg) var(--space-xs) var(--radius-lg);
   font-size: var(--font-size-base);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .agent-text {
@@ -781,7 +781,7 @@ watch(() => chatStore.messages.length, () => {
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--space-xs);
   font-size: var(--font-size-base);
   margin-bottom: var(--space-sm);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .chart-wrapper {
@@ -822,7 +822,7 @@ watch(() => chatStore.messages.length, () => {
   display: flex;
   align-items: flex-start;
   gap: var(--space-sm);
-  background: rgba(0, 212, 255, 0.04);
+  background: rgba(79, 140, 247, 0.04);
   border-left: 3px solid var(--accent);
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-xs);
@@ -874,7 +874,7 @@ watch(() => chatStore.messages.length, () => {
 }
 
 .data-table tbody tr:hover {
-  background: rgba(0, 212, 255, 0.04);
+  background: rgba(79, 140, 247, 0.04);
 }
 
 /* Message actions */
@@ -981,7 +981,7 @@ watch(() => chatStore.messages.length, () => {
 .btn-attach:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(0, 212, 255, 0.05);
+  background: rgba(79, 140, 247, 0.05);
 }
 
 .btn-attach:disabled {
@@ -993,8 +993,8 @@ watch(() => chatStore.messages.length, () => {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  background: rgba(0, 212, 255, 0.08);
-  border: 1px solid rgba(0, 212, 255, 0.2);
+  background: rgba(79, 140, 247, 0.08);
+  border: 1px solid rgba(79, 140, 247, 0.2);
   border-radius: var(--radius-md);
   padding: 4px 10px;
   font-size: var(--font-size-sm);
@@ -1044,13 +1044,13 @@ watch(() => chatStore.messages.length, () => {
   padding: var(--space-sm) var(--space-xl);
   border-radius: var(--radius-md);
   height: 42px;
-  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(79, 140, 247, 0.2);
   transition: all var(--transition-base) var(--ease-out);
 }
 
 .btn-send:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(79, 140, 247, 0.3);
 }
 
 .btn-send:disabled {

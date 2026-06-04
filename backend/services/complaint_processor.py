@@ -1,5 +1,6 @@
 """客诉数据处理服务 — 封装客诉.md 的 46 条正则规则为可复用类。"""
 
+from __future__ import annotations
 import re
 import json
 from collections import Counter, defaultdict

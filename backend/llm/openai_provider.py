@@ -1,8 +1,9 @@
 """OpenAI-compatible API Provider 适配器（兼容 vLLM/Ollama）。"""
 
+from __future__ import annotations
 from typing import Optional
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, APITimeoutError, APIError
 
 from backend.llm.base import LLMProvider
 
@@ -21,6 +22,8 @@ class OpenAIProvider(LLMProvider):
         if api_key:
             kwargs['api_key'] = api_key
             kwargs['default_headers'] = {"api-key": api_key}
+        kwargs['timeout'] = 30.0
+        kwargs['max_retries'] = 1
         self.client = AsyncOpenAI(**kwargs)
 
     async def chat_completion(
@@ -35,4 +38,9 @@ class OpenAIProvider(LLMProvider):
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return response.choices[0].message.content
+        msg = response.choices[0].message
+        content = msg.content or ""
+        # MiMo thinking mode 把实际内容放在 reasoning_content 而非 content
+        if not content:
+            content = getattr(msg, "reasoning_content", None) or ""
+        return content

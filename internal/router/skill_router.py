@@ -1,5 +1,6 @@
 """SkillRouter: 关键词路由 → Agent 选择 → Skill 匹配 → 工具分发。"""
 
+from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path

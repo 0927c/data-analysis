@@ -1,5 +1,6 @@
 """AgentRegistry: 从 .claude/agents/*.md 解析智能体定义，提供发现和路由。"""
 
+from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path

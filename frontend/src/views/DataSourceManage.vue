@@ -261,12 +261,12 @@ async function uploadFile(file) {
 
 .upload-zone:hover {
   border-color: var(--accent);
-  background: rgba(0, 212, 255, 0.03);
+  background: rgba(79, 140, 247, 0.03);
 }
 
 .upload-zone.drag-over {
   border-color: var(--accent);
-  background: rgba(0, 212, 255, 0.06);
+  background: rgba(79, 140, 247, 0.06);
   transform: scale(1.01);
   box-shadow: 0 0 24px var(--accent-glow);
 }
@@ -370,7 +370,7 @@ async function uploadFile(file) {
 
 .btn-dismiss:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 /* Loading */
@@ -454,7 +454,7 @@ async function uploadFile(file) {
 
 .btn-refresh:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(79, 140, 247, 0.2);
 }
 
 .btn-refresh:disabled {
@@ -493,7 +493,7 @@ async function uploadFile(file) {
 
 .btn-save:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.2);
+  box-shadow: 0 2px 8px rgba(79, 140, 247, 0.2);
 }
 
 /* Edit Form */
