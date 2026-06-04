@@ -51,6 +51,7 @@ flue-agent/node_modules/
 *.xlsx
 test_*.py
 test_*.json
+test_*.cjs
 
 # Claude settings (local)
 .claude/settings.local.json
