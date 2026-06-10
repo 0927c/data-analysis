@@ -114,7 +114,7 @@ async def chat(
 
     # 数据源切换检测
     if pm:
-        from backend.utils.datasource_detector import detect_datasource_switch
+        from backend.services.datasource_detector import detect_datasource_switch
         ds_list = pm.list_datasources_info()
         available_ds = [{"id": ds["datasource_id"], "name": f"数据源{ds['datasource_id']}", "record_count": ds["record_count"]} for ds in ds_list]
 
