@@ -6,7 +6,7 @@ import os
 import re
 from typing import Callable, Optional
 
-from backend.services.ticket_processor import TicketProcessor
+from backend.services.ticket_processor import TicketProcessor, TicketProcessorManager
 from backend.services.chart_renderer import (
     render_pie, render_bar, render_stacked_bar, render_horizontal_bar, render_rose, render_line,
 )
@@ -45,8 +45,9 @@ def _parse_skill_md(filepath: str) -> Optional[dict]:
 
 class SkillEngine:
 
-    def __init__(self, processor: TicketProcessor, llm_provider=None):
-        self.processor = processor
+    def __init__(self, processor=None, llm_provider=None, processor_manager: TicketProcessorManager = None):
+        self.processor = processor  # 向后兼容：单处理器模式
+        self.processor_manager = processor_manager  # 新模式：多数据源管理器
         self.llm = llm_provider
         self._skills: dict[str, dict] = {}
         self._handlers: dict[str, Callable] = {
@@ -56,6 +57,24 @@ class SkillEngine:
         }
         self._auto_discover_skills()
         self._register_chitchat()
+
+    def _resolve_processor(self, intent: dict = None) -> Optional[TicketProcessor]:
+        """解析当前应使用的 processor。
+
+        优先级：intent['processor'] > processor_manager.get(primary) > self.processor
+        """
+        # 1. intent 中直接指定的 processor（从 chat router 传入）
+        if intent and intent.get('processor'):
+            return intent['processor']
+
+        # 2. 从 processor_manager 获取 primary
+        if self.processor_manager:
+            mgr_proc = self.processor_manager.get_primary()
+            if mgr_proc:
+                return mgr_proc
+
+        # 3. 向后兼容
+        return self.processor
 
     def _auto_discover_skills(self):
         if not os.path.isdir(SKILLS_DIR):
@@ -126,7 +145,8 @@ class SkillEngine:
     # ===== 工单分析 Handler =====
 
     async def _handle_ticket_analysis(self, intent: dict) -> dict:
-        if not self.processor:
+        processor = self._resolve_processor(intent)
+        if not processor:
             return {
                 'message': '暂无可用的数据源，请先上传 Excel 文件或配置数据源路径。',
                 'charts': [],
@@ -143,11 +163,11 @@ class SkillEngine:
         data_table = None
         summary = ''
 
-        kpis = self.processor.get_summary_kpis(filters)
+        kpis = processor.get_summary_kpis(filters)
 
         # ---- 状态分布 ----
         if group_by == 'status' or chart_type == 'pie':
-            dist = self.processor.get_status_distribution(filters)
+            dist = processor.get_status_distribution(filters)
             charts.append({
                 'id': 'chart_status',
                 'title': '工单状态分布',
@@ -161,7 +181,7 @@ class SkillEngine:
 
         # ---- 服务组工作量 ----
         elif group_by == 'service_group':
-            dist = self.processor.get_service_group_distribution(filters)
+            dist = processor.get_service_group_distribution(filters)
             charts.append({
                 'id': 'chart_sg',
                 'title': '服务组工单量',
@@ -175,7 +195,7 @@ class SkillEngine:
 
         # ---- 责任人处理量 ----
         elif group_by == 'assignee':
-            dist = self.processor.get_assignee_distribution(filters)
+            dist = processor.get_assignee_distribution(filters)
             charts.append({
                 'id': 'chart_assignee',
                 'title': '责任人处理量 TOP15',
@@ -189,7 +209,7 @@ class SkillEngine:
 
         # ---- 部门分布 ----
         elif group_by == 'department':
-            dist = self.processor.get_department_distribution(filters)
+            dist = processor.get_department_distribution(filters)
             charts.append({
                 'id': 'chart_dept',
                 'title': '请求部门分布',
@@ -200,7 +220,7 @@ class SkillEngine:
 
         # ---- 来源渠道分布 ----
         elif group_by == 'source_channel':
-            dist = self.processor.get_source_channel_distribution(filters)
+            dist = processor.get_source_channel_distribution(filters)
             charts.append({
                 'id': 'chart_source',
                 'title': '来源渠道分布',
@@ -211,7 +231,7 @@ class SkillEngine:
 
         # ---- 故障原因分组 ----
         elif group_by == 'fault_group':
-            dist = self.processor.get_fault_group_distribution(filters)
+            dist = processor.get_fault_group_distribution(filters)
             charts.append({
                 'id': 'chart_fault',
                 'title': '故障原因分组',
@@ -222,7 +242,7 @@ class SkillEngine:
 
         # ---- 原因类别 ----
         elif group_by == 'cause_category':
-            dist = self.processor.get_cause_category_distribution(filters)
+            dist = processor.get_cause_category_distribution(filters)
             charts.append({
                 'id': 'chart_cause',
                 'title': '原因类别分布',
@@ -233,7 +253,7 @@ class SkillEngine:
 
         # ---- 业务系统分布 ----
         elif group_by == 'business_system':
-            dist = self.processor.get_business_system_distribution(filters)
+            dist = processor.get_business_system_distribution(filters)
             charts.append({
                 'id': 'chart_sys',
                 'title': '业务系统分布',
@@ -244,7 +264,7 @@ class SkillEngine:
 
         # ---- 解决人 ----
         elif group_by == 'resolver':
-            dist = self.processor.get_resolver_distribution(filters)
+            dist = processor.get_resolver_distribution(filters)
             charts.append({
                 'id': 'chart_resolver',
                 'title': '解决人处理量',
@@ -255,7 +275,7 @@ class SkillEngine:
 
         # ---- 周趋势 ----
         elif group_by == 'weekly':
-            trend = self.processor.get_weekly_trend(filters)
+            trend = processor.get_weekly_trend(filters)
             charts.append({
                 'id': 'chart_weekly',
                 'title': '每周工单趋势',
@@ -266,7 +286,7 @@ class SkillEngine:
 
         # ---- 月趋势 ----
         elif group_by == 'monthly':
-            trend = self.processor.get_monthly_trend(filters)
+            trend = processor.get_monthly_trend(filters)
             charts.append({
                 'id': 'chart_monthly',
                 'title': '每月工单趋势',
@@ -277,7 +297,7 @@ class SkillEngine:
 
         # ---- SLA 趋势 ----
         elif group_by == 'sla':
-            trend = self.processor.get_sla_weekly_trend(filters)
+            trend = processor.get_sla_weekly_trend(filters)
             charts.append({
                 'id': 'chart_sla_trend',
                 'title': 'SLA 达标率周趋势',
@@ -288,7 +308,7 @@ class SkillEngine:
 
         # ---- 解决时效 ----
         elif group_by == 'resolution_time':
-            buckets = self.processor.get_resolution_time_buckets(filters)
+            buckets = processor.get_resolution_time_buckets(filters)
             charts.append({
                 'id': 'chart_res_time',
                 'title': '解决时效分布',
@@ -299,7 +319,7 @@ class SkillEngine:
 
         # ---- 挂起分析 ----
         elif group_by == 'suspended':
-            sus = self.processor.get_suspended_breakdown(filters)
+            sus = processor.get_suspended_breakdown(filters)
             charts.append({
                 'id': 'chart_suspended',
                 'title': '挂起原因分析',
@@ -310,7 +330,7 @@ class SkillEngine:
 
         # ---- 交叉分析：服务组×状态 ----
         elif chart_type == 'stacked_bar':
-            ct = self.processor.get_status_by_service_group(filters)
+            ct = processor.get_status_by_service_group(filters)
             charts.append({
                 'id': 'chart_cross',
                 'title': '服务组×状态交叉分析',
@@ -321,7 +341,7 @@ class SkillEngine:
 
         # ---- 新增：故障根因深度分析 ----
         elif group_by == 'root_cause':
-            rc = self.processor.get_fault_root_cause_analysis(filters)
+            rc = processor.get_fault_root_cause_analysis(filters)
             if rc.get('fault_top_n'):
                 top = rc['fault_top_n'][:15]
                 labels = [t['cause'] for t in top]
@@ -345,7 +365,7 @@ class SkillEngine:
 
         # ---- 新增：重复工单挖掘 ----
         elif group_by == 'recurring':
-            dup = self.processor.get_recurring_tickets(filters)
+            dup = processor.get_recurring_tickets(filters)
             if dup['by_fault_group']:
                 top = dup['by_fault_group'][:15]
                 labels = [d['cause'] for d in top]
@@ -362,7 +382,7 @@ class SkillEngine:
 
         # ---- 新增：运维质量指标 ----
         elif group_by == 'ops_quality':
-            ops = self.processor.get_ops_quality_metrics(filters)
+            ops = processor.get_ops_quality_metrics(filters)
             charts.append({
                 'id': 'chart_ops',
                 'title': '运维质量指标',
@@ -383,7 +403,7 @@ class SkillEngine:
 
         # ---- 新增：症状→方案聚类 ----
         elif group_by == 'symptom_solution':
-            mapping = self.processor.get_symptom_solution_mapping(filters)
+            mapping = processor.get_symptom_solution_mapping(filters)
             clusters = mapping.get('clusters', [])[:15]
             if clusters:
                 labels = [c['symptom'] for c in clusters]
@@ -403,7 +423,7 @@ class SkillEngine:
 
         # ---- 新增：请求人行为与组织分析 ----
         elif group_by == 'requester':
-            behavior = self.processor.get_requester_behavior(filters)
+            behavior = processor.get_requester_behavior(filters)
             if behavior.get('top_requesters') and behavior['top_requesters']['values']:
                 charts.append({
                     'id': 'chart_requester',
@@ -424,7 +444,7 @@ class SkillEngine:
 
         # ---- 新增：性质占比与趋势 ----
         elif group_by == 'nature_trend':
-            nt = self.processor.get_nature_trend(filters)
+            nt = processor.get_nature_trend(filters)
             dist = nt['distribution']
             if dist['labels']:
                 charts.append({
@@ -459,7 +479,7 @@ class SkillEngine:
             ]}
             summary = f'工单 KPI 汇总：总 {kpis["total"]} 件，SLA 达标率 {kpis["sla_ratio"]}%。'
 
-        insights = self.processor.generate_insights(filters)
+        insights = processor.generate_insights(filters)
 
         return {
             'message': summary,
@@ -471,7 +491,8 @@ class SkillEngine:
     # ===== 数据查询 Handler =====
 
     async def _handle_data_query(self, intent: dict) -> dict:
-        if not self.processor:
+        processor = self._resolve_processor(intent)
+        if not processor:
             return {
                 'message': '暂无可用的数据源，请先上传 Excel 文件。',
                 'charts': [],
@@ -488,26 +509,26 @@ class SkillEngine:
 
         # 按 query_type 分发到不同的 TicketProcessor 方法
         query_handlers = {
-            'status_distribution': lambda f: (self.processor.get_status_distribution(f), 'pie', '状态分布'),
-            'service_group_distribution': lambda f: (self.processor.get_service_group_distribution(f), 'horizontal_bar', '服务组工作量'),
-            'assignee_distribution': lambda f: (self.processor.get_assignee_distribution(f, top_n=15), 'horizontal_bar', '责任人处理量'),
-            'department_distribution': lambda f: (self.processor.get_department_distribution(f), 'bar', '部门分布'),
-            'source_channel_distribution': lambda f: (self.processor.get_source_channel_distribution(f), 'pie', '来源渠道分布'),
-            'fault_group_distribution': lambda f: (self.processor.get_fault_group_distribution(f), 'pie', '故障原因分组'),
-            'cause_category_distribution': lambda f: (self.processor.get_cause_category_distribution(f), 'pie', '原因类别'),
-            'weekly_trend': lambda f: (self.processor.get_weekly_trend(f), 'line', '每周趋势'),
-            'monthly_trend': lambda f: (self.processor.get_monthly_trend(f), 'line', '每月趋势'),
-            'sla_weekly_trend': lambda f: (self.processor.get_sla_weekly_trend(f), 'line', 'SLA趋势'),
-            'suspended_breakdown': lambda f: (self.processor.get_suspended_breakdown(f), 'horizontal_bar', '挂起原因'),
-            'evaluation_summary': lambda f: (self.processor.get_evaluation_summary(f), None, '满意度'),
-            'resolution_time_buckets': lambda f: (self.processor.get_resolution_time_buckets(f), 'bar', '解决时效'),
-            'fault_root_cause_analysis': lambda f: (self.processor.get_fault_root_cause_analysis(f), None, '故障根因分析'),
-            'fault_cause_trend': lambda f: (self.processor.get_fault_cause_trend(f), 'line', '故障原因趋势'),
-            'symptom_solution_mapping': lambda f: (self.processor.get_symptom_solution_mapping(f), None, '症状方案聚类'),
-            'recurring_tickets': lambda f: (self.processor.get_recurring_tickets(f), None, '重复工单'),
-            'nature_trend': lambda f: (self.processor.get_nature_trend(f), None, '性质趋势'),
-            'requester_behavior': lambda f: (self.processor.get_requester_behavior(f), None, '请求人行为'),
-            'ops_quality_metrics': lambda f: (self.processor.get_ops_quality_metrics(f), None, '运维质量'),
+            'status_distribution': lambda f: (processor.get_status_distribution(f), 'pie', '状态分布'),
+            'service_group_distribution': lambda f: (processor.get_service_group_distribution(f), 'horizontal_bar', '服务组工作量'),
+            'assignee_distribution': lambda f: (processor.get_assignee_distribution(f, top_n=15), 'horizontal_bar', '责任人处理量'),
+            'department_distribution': lambda f: (processor.get_department_distribution(f), 'bar', '部门分布'),
+            'source_channel_distribution': lambda f: (processor.get_source_channel_distribution(f), 'pie', '来源渠道分布'),
+            'fault_group_distribution': lambda f: (processor.get_fault_group_distribution(f), 'pie', '故障原因分组'),
+            'cause_category_distribution': lambda f: (processor.get_cause_category_distribution(f), 'pie', '原因类别'),
+            'weekly_trend': lambda f: (processor.get_weekly_trend(f), 'line', '每周趋势'),
+            'monthly_trend': lambda f: (processor.get_monthly_trend(f), 'line', '每月趋势'),
+            'sla_weekly_trend': lambda f: (processor.get_sla_weekly_trend(f), 'line', 'SLA趋势'),
+            'suspended_breakdown': lambda f: (processor.get_suspended_breakdown(f), 'horizontal_bar', '挂起原因'),
+            'evaluation_summary': lambda f: (processor.get_evaluation_summary(f), None, '满意度'),
+            'resolution_time_buckets': lambda f: (processor.get_resolution_time_buckets(f), 'bar', '解决时效'),
+            'fault_root_cause_analysis': lambda f: (processor.get_fault_root_cause_analysis(f), None, '故障根因分析'),
+            'fault_cause_trend': lambda f: (processor.get_fault_cause_trend(f), 'line', '故障原因趋势'),
+            'symptom_solution_mapping': lambda f: (processor.get_symptom_solution_mapping(f), None, '症状方案聚类'),
+            'recurring_tickets': lambda f: (processor.get_recurring_tickets(f), None, '重复工单'),
+            'nature_trend': lambda f: (processor.get_nature_trend(f), None, '性质趋势'),
+            'requester_behavior': lambda f: (processor.get_requester_behavior(f), None, '请求人行为'),
+            'ops_quality_metrics': lambda f: (processor.get_ops_quality_metrics(f), None, '运维质量'),
         }
 
         handler = query_handlers.get(query_type)
@@ -556,7 +577,7 @@ class SkillEngine:
 
             summary = f'{title}查询完成。'
         else:
-            kpis = self.processor.get_summary_kpis(filters)
+            kpis = processor.get_summary_kpis(filters)
             rows = [
                 ['总工单数', str(kpis['total'])],
                 ['已解决', f'{kpis["resolved_count"]}件 ({kpis["resolved_ratio"]}%)'],
@@ -566,7 +587,7 @@ class SkillEngine:
             data_table = {'headers': ['指标', '值'], 'rows': rows}
             summary = f'KPI 汇总：总工单 {kpis["total"]} 件，SLA 达标率 {kpis["sla_ratio"]}%。'
 
-        insights = self.processor.generate_insights(filters)
+        insights = processor.generate_insights(filters)
 
         return {
             'message': summary,
@@ -578,7 +599,8 @@ class SkillEngine:
     # ===== 报告导出 Handler =====
 
     async def _handle_report_export(self, intent: dict) -> dict:
-        if not self.processor:
+        processor = self._resolve_processor(intent)
+        if not processor:
             return {
                 'message': '暂无可用的数据源，请先上传 Excel 文件。',
                 'charts': [],
@@ -587,13 +609,13 @@ class SkillEngine:
             }
 
         filters = intent.get('filters', {})
-        kpis = self.processor.get_summary_kpis(filters)
+        kpis = processor.get_summary_kpis(filters)
 
-        status_dist = self.processor.get_status_distribution(filters)
-        sg_dist = self.processor.get_service_group_distribution(filters)
-        assignee_dist = self.processor.get_assignee_distribution(filters)
-        weekly_trend = self.processor.get_weekly_trend(filters)
-        insights = self.processor.generate_insights(filters)
+        status_dist = processor.get_status_distribution(filters)
+        sg_dist = processor.get_service_group_distribution(filters)
+        assignee_dist = processor.get_assignee_distribution(filters)
+        weekly_trend = processor.get_weekly_trend(filters)
+        insights = processor.generate_insights(filters)
 
         charts = [
             {
@@ -646,6 +668,7 @@ class SkillEngine:
 
     async def _handle_chitchat(self, intent: dict) -> dict:
         user_message = intent.get('message', '')
+        processor = self._resolve_processor(intent)
 
         if not self.llm:
             return {
@@ -656,16 +679,16 @@ class SkillEngine:
             }
 
         data_context = ""
-        if self.processor:
+        if processor:
             try:
-                kpis = self.processor.get_summary_kpis()
-                status_dist = self.processor.get_status_distribution()
-                sg_dist = self.processor.get_service_group_distribution()
-                eval_data = self.processor.get_evaluation_summary()
-                recurring = self.processor.get_recurring_tickets()
-                ops = self.processor.get_ops_quality_metrics()
-                behavior = self.processor.get_requester_behavior()
-                root_cause = self.processor.get_fault_root_cause_analysis()
+                kpis = processor.get_summary_kpis()
+                status_dist = processor.get_status_distribution()
+                sg_dist = processor.get_service_group_distribution()
+                eval_data = processor.get_evaluation_summary()
+                recurring = processor.get_recurring_tickets()
+                ops = processor.get_ops_quality_metrics()
+                behavior = processor.get_requester_behavior()
+                root_cause = processor.get_fault_root_cause_analysis()
 
                 status_str = ', '.join([f"{l}:{v}件" for l, v in zip(status_dist['labels'][:5], status_dist['values'][:5])])
                 sg_str = ', '.join([f"{l}:{v}件" for l, v in zip(sg_dist['labels'][:5], sg_dist['values'][:5])])

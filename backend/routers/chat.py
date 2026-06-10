@@ -18,7 +18,7 @@ from backend.schemas import (
     ChatMessageRequest, ChatResponse, ChartData,
     SessionOut, MessageOut,
 )
-from backend.services.ticket_processor import TicketProcessor
+from backend.services.ticket_processor import TicketProcessor, TicketProcessorManager
 from backend.services.conversation_manager import ConversationManager
 from backend.services.intent_parser import IntentParser
 from backend.services.skill_engine import SkillEngine
@@ -35,6 +35,8 @@ _conversation_manager: Optional[ConversationManager] = None
 _intent_parser: Optional[IntentParser] = None
 _skill_engine: Optional[SkillEngine] = None
 _processor: Optional[TicketProcessor] = None
+_processor_manager: Optional[TicketProcessorManager] = None
+_memory_service = None  # MemoryService
 
 
 def get_cm() -> ConversationManager:
@@ -53,12 +55,22 @@ def get_cp() -> TicketProcessor:
     return _processor
 
 
-def set_globals(cm: ConversationManager, ip: IntentParser, se: SkillEngine, cp: TicketProcessor):
-    global _conversation_manager, _intent_parser, _skill_engine, _processor
+def get_pm() -> Optional[TicketProcessorManager]:
+    return _processor_manager
+
+
+def get_memory_service():
+    return _memory_service
+
+
+def set_globals(cm, ip, se, cp, processor_manager=None, memory_service=None):
+    global _conversation_manager, _intent_parser, _skill_engine, _processor, _processor_manager, _memory_service
     _conversation_manager = cm
     _intent_parser = ip
     _skill_engine = se
     _processor = cp
+    _processor_manager = processor_manager
+    _memory_service = memory_service
 
 
 @router.post("", response_model=ChatResponse)
@@ -95,6 +107,50 @@ async def chat(
     cm.load_state(session_id, session.context_state)
     ctx = cm.get_context(session_id)
 
+    # === HOOK 1: 记忆注入 + 数据源切换检测（意图解析前） ===
+    memory_svc = get_memory_service()
+    pm = get_pm()
+    memory_hints = []
+
+    # 数据源切换检测
+    if pm:
+        from backend.utils.datasource_detector import detect_datasource_switch
+        ds_list = pm.list_datasources_info()
+        available_ds = [{"id": ds["datasource_id"], "name": f"数据源{ds['datasource_id']}", "record_count": ds["record_count"]} for ds in ds_list]
+
+        # 尝试从数据库获取真实名称
+        try:
+            ds_result = await db.execute(select(DataSource))
+            for ds_row in ds_result.scalars().all():
+                for ads in available_ds:
+                    if ads["id"] == ds_row.id:
+                        ads["name"] = ds_row.name
+        except Exception:
+            pass
+
+        ds_switch = detect_datasource_switch(req.message, available_ds)
+        if ds_switch is not None:
+            ctx.switch_datasource(ds_switch)
+            memory_hints.append(f"已切换到数据源: {next((d['name'] for d in available_ds if d['id'] == ds_switch), ds_switch)}")
+
+    # 记忆富化
+    memory_ctx = {}
+    if memory_svc:
+        try:
+            memory_ctx = await memory_svc.enrich_context(
+                session_id=session_id,
+                user_id=user.id,
+                message=req.message,
+                primary_datasource_id=ctx.primary_datasource_id,
+            )
+        except Exception:
+            memory_ctx = {}
+
+    # 应用推荐筛选（不覆盖用户显式设置的筛选）
+    for k, v in memory_ctx.get("suggested_filters", {}).items():
+        if k not in ctx.active_filters:
+            ctx.active_filters[k] = v
+
     # 检查重置命令
     try:
         intent = await ip.parse(req.message, ctx, se.get_available_skills())
@@ -122,6 +178,20 @@ async def chat(
         {'role': m.role, 'content': m.content}
         for m in recent_msgs if m.content
     ]
+
+    # 注入历史分析到 chat_history（记忆增强）
+    for analysis in memory_ctx.get("relevant_analyses", [])[:3]:
+        intent['chat_history'].append({
+            'role': 'system',
+            'content': f'[历史分析] {analysis["summary"]}'
+        })
+        memory_hints.append(f"参考历史分析: {analysis.get('analysis_type', '')}")
+
+    # === HOOK 3: 处理器路由 ===
+    if pm:
+        processor = pm.get(ctx.primary_datasource_id) or pm.get_primary()
+        intent['processor'] = processor
+
     try:
         result = await se.execute_skill(intent.get('skill_id', 'ticket_analysis'), intent)
     except ValueError as e:
@@ -171,6 +241,32 @@ async def chat(
     await db.flush()
     report_id = report.id
 
+    # === HOOK 2: 记忆存储（报表生成后） ===
+    if memory_svc and not is_chitchat:
+        try:
+            # 保存分析结论
+            await memory_svc.save_conclusion(
+                user_id=user.id,
+                session_id=session_id,
+                datasource_id=ctx.primary_datasource_id,
+                analysis_type=intent.get('group_by', 'unknown'),
+                summary=agent_content[:500] if agent_content else '',
+                findings=result.get('insights', []),
+                snapshot={'chart_count': len(result.get('charts', [])), 'filters': ctx.active_filters},
+                tags=[intent.get('group_by', ''), intent.get('chart_type', '')],
+            )
+
+            # 更新用户偏好
+            dimension = intent.get('group_by')
+            if dimension:
+                await memory_svc.track_usage(user.id, dimension, {'datasource_id': ctx.primary_datasource_id})
+
+            # 更新对话摘要
+            await memory_svc.update_session_summary(session_id, req.message, "user")
+            await memory_svc.update_session_summary(session_id, (agent_content or '')[:300], "assistant")
+        except Exception:
+            pass  # 记忆存储失败不应影响主流程
+
     # 更新上下文中的最后报告 ID
     chart_type = result['charts'][0]['type'] if result['charts'] else None
     cm.update_last_report(session_id, report_id, chart_type or '')
@@ -197,6 +293,14 @@ async def chat(
         for c in convert_numpy(result['charts'])
     ]
 
+    # 组装活跃数据源信息
+    active_ds_info = None
+    if pm:
+        active_ds_info = [
+            {"id": ds["datasource_id"], "record_count": ds["record_count"], "is_primary": ds["is_primary"]}
+            for ds in pm.list_datasources_info()
+        ]
+
     return ChatResponse(
         message=agent_content,
         session_id=session_id,
@@ -204,6 +308,8 @@ async def chat(
         insights=convert_numpy([i.get('title', '') for i in result.get('insights', [])]),
         data_table=convert_numpy(result.get('data_table')),
         report_id=report_id,
+        active_datasources=active_ds_info,
+        memory_hints=memory_hints if memory_hints else None,
     )
 
 
@@ -495,3 +601,43 @@ async def reset_session(
     session.context_state = cm.save_state(session_id)
     await db.commit()
     return {"message": "对话上下文已重置"}
+
+
+@router.post("/sessions/{session_id}/switch-datasource")
+async def switch_datasource(
+    session_id: int,
+    datasource_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """切换会话的活跃数据源。"""
+    result = await db.execute(
+        select(Session).where(Session.id == session_id, Session.user_id == user.id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="会话不存在")
+
+    pm = get_pm()
+    if not pm:
+        raise HTTPException(status_code=503, detail="多数据源管理器不可用")
+
+    if not pm.has_datasource(datasource_id):
+        raise HTTPException(status_code=404, detail=f"数据源 {datasource_id} 不存在或未加载")
+
+    cm = get_cm()
+    cm.load_state(session_id, session.context_state)
+    cm.switch_datasource(session_id, datasource_id)
+    session.context_state = cm.save_state(session_id)
+
+    # 更新 processor_manager 的 primary
+    pm.set_primary(datasource_id)
+
+    await db.commit()
+
+    ds_info = pm.list_datasources_info()
+    return {
+        "message": f"已切换到数据源 {datasource_id}",
+        "primary_datasource_id": datasource_id,
+        "active_datasources": ds_info,
+    }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 import json
 import re
+from datetime import datetime, timedelta
 from typing import Optional
 
 from backend.llm.base import LLMProvider
@@ -92,11 +93,21 @@ class IntentParser:
 
 当前上下文筛选条件: {json.dumps(context.active_filters, ensure_ascii=False)}
 
+**日期筛选（必须提取）**：
+- 当用户提到具体时间（如"五月份"、"2026年5月"、"上周"、"最近一周"），必须在 filters 中添加 date_from 和 date_to
+- "五月份"/"5月" → date_from="2026-05-01", date_to="2026-05-31"（用当前年份）
+- "2026年5月" → date_from="2026-05-01", date_to="2026-05-31"
+- "上周" → 计算上周一到上周日
+- "最近一周" → 7天前到今天
+- "上个月" → 上个月1号到上个月最后一天
+- "本周" → 本周一到今天
+- "今年" → 今年1月1号到今天
+
 返回 JSON 格式:
 {{
   "skill_id": "ticket_analysis" | "chitchat",
-  "filters": {{"status": "...", "service_group": "...", "assignee": "..."}},
-  "group_by": "status | service_group | root_cause | recurring | ops_quality | symptom_solution | requester | nature_trend",
+  "filters": {{"status": "...", "service_group": "...", "date_from": "2026-05-01", "date_to": "2026-05-31"}},
+  "group_by": "status | service_group | root_cause | recurring | ops_quality | symptom_solution | requester | nature_trend | business_system",
   "chart_type": "bar | pie | line | stacked_bar | horizontal_bar | rose",
   "action": "query" | "chitchat"
 }}
@@ -108,7 +119,9 @@ class IntentParser:
 - 用户询问症状对应方案、解决方案聚类 → group_by="symptom_solution", chart_type="bar"
 - 用户询问请求人行为、谁提交最多、组织分布 → group_by="requester", chart_type="horizontal_bar"
 - 用户询问各类性质占比 → group_by="nature_trend", chart_type="pie"
+- 用户询问各系统/业务系统 → group_by="business_system", chart_type="bar"
 - 如果用户问题与工单数据无关（闲聊、问天气等），skill_id 设为 "chitchat"
+- **有日期时必须同时提取 date_from 和 date_to**
 - 仅返回 JSON，不要任何额外文字"""
 
         messages = [
@@ -134,13 +147,141 @@ class IntentParser:
                 pass
         return {"skill_id": "ticket_analysis", "filters": {}, "group_by": "status", "chart_type": "pie"}
 
+    # ===== 日期筛选提取 =====
+
+    def _extract_date_filters(self, msg: str) -> dict:
+        """从消息中提取日期范围筛选条件。"""
+        now = datetime.now()
+        year = now.year
+        month = now.month
+
+        # 中文月份映射
+        cn_month_map = {
+            '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6,
+            '七': 7, '八': 8, '九': 9, '十': 10, '十一': 11, '十二': 12,
+        }
+
+        # 1. 匹配 "2026年5月" 或 "2026年五月"
+        m = re.search(r'(\d{4})\s*年\s*(\d+|[一二三四五六七八九十]+)月', msg)
+        if m:
+            target_year = int(m.group(1))
+            month_str = m.group(2)
+            target_month = cn_month_map.get(month_str, int(month_str)) if month_str in cn_month_map else int(month_str)
+            return self._month_range(target_year, target_month)
+
+        # 2. 匹配 "5月" "五月份" "五月的" "5月份"
+        m = re.search(r'(\d+|[一二三四五六七八九十]+)月[份的]?', msg)
+        if m:
+            month_str = m.group(1)
+            target_month = cn_month_map.get(month_str, int(month_str)) if month_str in cn_month_map else int(month_str)
+            return self._month_range(year, target_month)
+
+        # 3. 匹配 "2026年5月1日" 到 "2026年5月31日" 或 "2026-05-01到2026-05-31"
+        m = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s*(?:到|至|-)\s*(\d{4})[-/](\d{1,2})[-/](\d{1,2})', msg)
+        if m:
+            return {
+                'date_from': f'{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}',
+                'date_to': f'{m.group(4)}-{int(m.group(5)):02d}-{int(m.group(6)):02d}',
+            }
+
+        # 4. 相对时间："上周" "上周的"
+        if '上周' in msg:
+            return self._last_week_range(now)
+
+        # 5. "本周" "这周"
+        if '本周' in msg or '这周' in msg:
+            return self._this_week_range(now)
+
+        # 6. "上个月" "上月"
+        if '上个月' in msg or '上月' in msg:
+            return self._last_month_range(year, month)
+
+        # 7. "最近一周" "近一周" "最近7天" "近7天"
+        if any(kw in msg for kw in ['最近一周', '近一周', '最近7天', '近7天']):
+            return self._recent_days_range(now, 7)
+
+        # 8. "最近一个月" "近一个月" "最近30天"
+        if any(kw in msg for kw in ['最近一个月', '近一个月', '最近30天', '近30天']):
+            return self._recent_days_range(now, 30)
+
+        # 9. "今年" "本年度"
+        if '今年' in msg or '本年度' in msg:
+            return {'date_from': f'{year}-01-01', 'date_to': now.strftime('%Y-%m-%d')}
+
+        # 10. "去年"
+        if '去年' in msg or '上年度' in msg:
+            return {'date_from': f'{year - 1}-01-01', 'date_to': f'{year - 1}-12-31'}
+
+        return {}
+
+    @staticmethod
+    def _month_range(year: int, month: int) -> dict:
+        import calendar
+        last_day = calendar.monthrange(year, month)[1]
+        return {
+            'date_from': f'{year}-{month:02d}-01',
+            'date_to': f'{year}-{month:02d}-{last_day:02d}',
+        }
+
+    @staticmethod
+    def _last_week_range(now: datetime) -> dict:
+        # 上周一
+        days_since_monday = now.weekday()  # 0=Monday
+        this_monday = now - timedelta(days=days_since_monday)
+        last_monday = this_monday - timedelta(days=7)
+        last_sunday = this_monday - timedelta(days=1)
+        return {
+            'date_from': last_monday.strftime('%Y-%m-%d'),
+            'date_to': last_sunday.strftime('%Y-%m-%d'),
+        }
+
+    @staticmethod
+    def _this_week_range(now: datetime) -> dict:
+        days_since_monday = now.weekday()
+        this_monday = now - timedelta(days=days_since_monday)
+        return {
+            'date_from': this_monday.strftime('%Y-%m-%d'),
+            'date_to': now.strftime('%Y-%m-%d'),
+        }
+
+    @staticmethod
+    def _last_month_range(year: int, month: int) -> dict:
+        if month == 1:
+            return {'date_from': f'{year - 1}-12-01', 'date_to': f'{year - 1}-12-31'}
+        import calendar
+        last_day = calendar.monthrange(year, month - 1)[1]
+        return {
+            'date_from': f'{year}-{month - 1:02d}-01',
+            'date_to': f'{year}-{month - 1:02d}-{last_day:02d}',
+        }
+
+    @staticmethod
+    def _recent_days_range(now: datetime, days: int) -> dict:
+        start = now - timedelta(days=days)
+        return {
+            'date_from': start.strftime('%Y-%m-%d'),
+            'date_to': now.strftime('%Y-%m-%d'),
+        }
+
     def _parse_with_rules(self, user_message: str, context: ContextState) -> dict:
         msg = user_message.lower()
         filters = dict(context.active_filters)
 
-        # 检测 group_by
+        # ===== 日期筛选提取 =====
+        date_filters = self._extract_date_filters(msg)
+        if date_filters:
+            filters.update(date_filters)
+
+        # 检测 group_by（先排除已匹配为日期关键词的 "月"）
         group_by = 'status'
+        # 如果已提取日期筛选，跳过"月"/"每月"/"月报"等趋势类关键词
+        skip_date_keywords = set()
+        if date_filters:
+            skip_date_keywords = {'月', '每月', '月报'}
+
         for kw, gb in sorted(INTENT_GROUP_MAP.items(), key=lambda x: -len(x[0])):
+            if kw in skip_date_keywords:
+                continue
             if kw in msg:
                 group_by = gb
                 break

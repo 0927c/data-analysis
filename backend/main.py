@@ -10,13 +10,14 @@ from backend.config import settings
 from backend.database import engine, Base, get_db
 from backend.auth import get_current_user
 from backend.models import User
-from backend.services.ticket_processor import TicketProcessor
+from backend.services.ticket_processor import TicketProcessor, TicketProcessorManager
 from backend.services.conversation_manager import ConversationManager
 from backend.services.intent_parser import IntentParser
 from backend.services.skill_engine import SkillEngine
 from backend.routers import auth, chat, reports, datasources, skills, analytics
 from backend.routers.chat import set_globals as set_chat_globals
 from backend.routers.analytics import set_processor as set_analytics_processor
+from backend.routers.analytics import set_processor_manager as set_analytics_processor_manager
 from backend.routers.reports import set_processor as set_reports_processor
 
 
@@ -78,10 +79,12 @@ async def lifespan(app: FastAPI):
     intent_parser = IntentParser(llm_provider=llm_provider)
     skill_engine = SkillEngine(processor, llm_provider=llm_provider)
 
-    # 注入到路由
-    set_chat_globals(conversation_manager, intent_parser, skill_engine, processor)
-    set_analytics_processor(processor)
-    set_reports_processor(processor)
+    # ─── 多数据源管理器 ─────────────────────────────────
+    processor_manager = TicketProcessorManager()
+    if processor and settings.TICKET_EXCEL_PATH:
+        processor_manager.register(datasource_id=0, file_path=settings.TICKET_EXCEL_PATH)
+        processor_manager.set_primary(0)
+    skill_engine.processor_manager = processor_manager
 
     # ─── Harness 层初始化 ───────────────────────────────
     from internal.session.manager import SessionManager
@@ -109,6 +112,18 @@ async def lifespan(app: FastAPI):
         ReportExportTool(processor),
     ]
     skill_router = SkillRouter(registry, tools)
+
+    # ─── MemoryService 初始化 ─────────────────────────────
+    from backend.services.memory_service import MemoryService
+    memory_service = MemoryService(async_session, memory)
+    app.state.memory_service = memory_service
+    app.state.processor_manager = processor_manager
+
+    # 注入到路由
+    set_chat_globals(conversation_manager, intent_parser, skill_engine, processor, processor_manager, memory_service)
+    set_analytics_processor(processor)
+    set_analytics_processor_manager(processor_manager)
+    set_reports_processor(processor)
 
     # 存储到 app.state
     app.state.session_manager = session_mgr

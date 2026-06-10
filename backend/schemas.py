@@ -46,6 +46,8 @@ class ChatResponse(BaseModel):
     insights: list[str] = []
     data_table: Optional[dict] = None
     report_id: Optional[int] = None
+    active_datasources: Optional[list[dict]] = None
+    memory_hints: Optional[list[str]] = None
 
 
 class SessionOut(BaseModel):
@@ -92,6 +94,14 @@ class DataSourceOut(BaseModel):
     record_count: int
     last_updated: Optional[datetime]
     created_at: Optional[datetime]
+
+
+class ConfirmUploadRequest(BaseModel):
+    """确认上传请求 — 用户确认字段映射后提交。"""
+    temp_path: str
+    filename: str
+    field_mapping: dict[str, str]  # {excel_col: system_field}
+    datasource_name: Optional[str] = None
 
 
 # --- Skills ---

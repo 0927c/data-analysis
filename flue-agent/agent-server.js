@@ -151,9 +151,18 @@ const server = createServer(async (req, res) => {
 2. **chitchat** — 用户闲聊、问好、提问与数据无关的问题（如：你是谁、今天天气等）
 
 如果是ticket_analysis，请进一步提取：
-- group_by: 按什么维度分组（status/service_group/assignee/department/source/fault_group/business_system/weekly/monthly/sla/resolver/recurring）
+- group_by: 按什么维度分组（status/service_group/assignee/department/source/fault_group/business_system/weekly/monthly/sla/resolver/recurring/root_cause/recurring/ops_quality/symptom_solution/requester/nature_trend）
 - chart_type: 推荐图表类型（pie/bar/line/horizontal_bar/stacked_bar）
-- filters: 任何过滤条件
+- filters: 过滤条件，**必须提取日期筛选**：
+  - 用户提到"五月份"/"5月" → filters.date_from="2026-05-01", filters.date_to="2026-05-31"
+  - 用户提到"2026年5月" → filters.date_from="2026-05-01", filters.date_to="2026-05-31"
+  - 用户提到"上个月" → 计算上月范围
+  - 用户提到"上周" → 计算上周范围
+  - 用户提到"最近一周" → 7天前到今天
+  - 用户提到"今年" → 今年1月1日到现在
+  - 如果用户没有提到时间，不要添加date_from/date_to
+
+**重要**：用户说"五月份有多少工单"时，必须提取date_from和date_to到filters中，而不是把group_by设为monthly！
 
 用户消息: "${message}"`;
 

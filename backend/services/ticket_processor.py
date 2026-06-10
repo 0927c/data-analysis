@@ -107,9 +107,10 @@ class TicketProcessor:
         '备注1': 'remark1',
     }
 
-    def __init__(self, excel_path: str):
+    def __init__(self, excel_path: str, custom_col_map: dict = None):
         self.excel_path = Path(excel_path)
         self._df: pd.DataFrame | None = None
+        self._custom_col_map = custom_col_map  # 用户自定义字段映射
 
     @property
     def df(self) -> pd.DataFrame:
@@ -117,13 +118,20 @@ class TicketProcessor:
             self._load()
         return self._df
 
+    def _get_col_map(self) -> dict:
+        """获取实际使用的列映射（自定义优先，否则使用默认 COL_MAP）。"""
+        if self._custom_col_map:
+            return {**self.COL_MAP, **self._custom_col_map}
+        return self.COL_MAP
+
     def _load(self):
         if not self.excel_path.exists():
             raise FileNotFoundError(f"Excel 文件不存在: {self.excel_path}")
 
         df = pd.read_excel(self.excel_path, sheet_name=0)
 
-        rename_map = {k: v for k, v in self.COL_MAP.items() if k in df.columns}
+        col_map = self._get_col_map()
+        rename_map = {k: v for k, v in col_map.items() if k in df.columns}
         df = df.rename(columns=rename_map)
 
         # 解析时间字段
@@ -906,3 +914,96 @@ class TicketProcessor:
             pass
 
         return insights
+
+
+# ============================================================
+# 多数据源处理器管理器
+# ============================================================
+
+class TicketProcessorManager:
+    """多数据源处理器管理器，替代全局单例。
+
+    管理多个 TicketProcessor 实例，每个对应一个 datasource_id。
+    支持设置 primary（默认查询的数据源）。
+    """
+
+    def __init__(self):
+        self._processors: dict[int, TicketProcessor] = {}
+        self._primary_id: Optional[int] = None
+        self._file_paths: dict[int, str] = {}
+
+    def register(self, datasource_id: int, file_path: str, field_mapping: dict = None) -> TicketProcessor:
+        """注册一个新数据源的处理器。"""
+        processor = TicketProcessor(file_path, custom_col_map=field_mapping)
+        _ = processor.df  # 触发加载
+        self._processors[datasource_id] = processor
+        self._file_paths[datasource_id] = file_path
+
+        # 如果是第一个注册的，自动设为 primary
+        if self._primary_id is None:
+            self._primary_id = datasource_id
+
+        return processor
+
+    def get(self, datasource_id: int) -> Optional[TicketProcessor]:
+        """获取指定数据源的处理器。"""
+        if datasource_id is None:
+            return self.get_primary()
+        return self._processors.get(datasource_id)
+
+    def get_primary(self) -> Optional[TicketProcessor]:
+        """获取当前主要数据源的处理器。"""
+        if self._primary_id is not None:
+            return self._processors.get(self._primary_id)
+        # 兜底：返回第一个
+        if self._processors:
+            first_id = next(iter(self._processors))
+            self._primary_id = first_id
+            return self._processors[first_id]
+        return None
+
+    def get_primary_id(self) -> Optional[int]:
+        """获取当前主要数据源 ID。"""
+        return self._primary_id
+
+    def set_primary(self, datasource_id: int) -> bool:
+        """设置主要数据源。"""
+        if datasource_id in self._processors:
+            self._primary_id = datasource_id
+            return True
+        return False
+
+    def list_ids(self) -> list[int]:
+        """列出所有已注册的数据源 ID。"""
+        return list(self._processors.keys())
+
+    def list_datasources_info(self) -> list[dict]:
+        """列出所有数据源的摘要信息。"""
+        result = []
+        for ds_id, proc in self._processors.items():
+            try:
+                total = len(proc.df)
+            except Exception:
+                total = 0
+            result.append({
+                "datasource_id": ds_id,
+                "record_count": total,
+                "is_primary": ds_id == self._primary_id,
+                "file_path": self._file_paths.get(ds_id, ""),
+            })
+        return result
+
+    def remove(self, datasource_id: int):
+        """移除一个数据源的处理器。"""
+        self._processors.pop(datasource_id, None)
+        self._file_paths.pop(datasource_id, None)
+        if self._primary_id == datasource_id:
+            # 切换到其他可用的数据源
+            if self._processors:
+                self._primary_id = next(iter(self._processors))
+            else:
+                self._primary_id = None
+
+    def has_datasource(self, datasource_id: int) -> bool:
+        """检查数据源是否已注册。"""
+        return datasource_id in self._processors

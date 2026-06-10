@@ -43,6 +43,14 @@
       <button class="btn-dismiss" @click="uploadError = ''">关闭</button>
     </div>
 
+    <!-- Mapping Preview Modal -->
+    <DataSourceMappingPreview
+      :visible="showPreviewModal"
+      :data="previewData"
+      @cancel="handlePreviewCancel"
+      @confirm="handleConfirmImport"
+    />
+
     <div v-if="loading" class="loading">加载中...</div>
 
     <div v-else class="datasource-list">
@@ -104,6 +112,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/api/client.js'
 import { useReportStore } from '@/store/index.js'
+import DataSourceMappingPreview from '@/components/DataSourceMappingPreview.vue'
 
 const router = useRouter()
 const reportStore = useReportStore()
@@ -121,6 +130,10 @@ const isDragOver = ref(false)
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadError = ref('')
+
+// Preview state (两阶段上传)
+const showPreviewModal = ref(false)
+const previewData = ref({})
 
 onMounted(async () => {
   await fetchDatasources()
@@ -203,26 +216,58 @@ async function uploadFile(file) {
   uploadError.value = ''
 
   try {
+    // 阶段1：上传获取预览
     const formData = new FormData()
     formData.append('file', file)
-    const { data } = await apiClient.post('/datasources/upload', formData, {
+    const { data } = await apiClient.post('/datasources/upload/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
+      timeout: 60000,
       onUploadProgress: (e) => {
         uploadProgress.value = Math.round(e.loaded / e.total * 80)
       },
     })
 
-    // Parsing complete
+    uploadProgress.value = 0
+    uploading.value = false
+
+    // 显示映射预览弹窗
+    previewData.value = data
+    showPreviewModal.value = true
+  } catch (err) {
+    uploadError.value = err.response?.data?.detail || err.message || '上传失败'
+    uploading.value = false
+    uploadProgress.value = 0
+  }
+}
+
+function handlePreviewCancel() {
+  showPreviewModal.value = false
+  previewData.value = {}
+}
+
+async function handleConfirmImport(confirmedMapping) {
+  uploading.value = true
+  uploadProgress.value = 50
+
+  try {
+    const { data } = await apiClient.post('/datasources/upload/confirm', {
+      temp_path: previewData.value.temp_path,
+      filename: previewData.value.filename,
+      field_mapping: confirmedMapping,
+      datasource_name: previewData.value.filename.replace(/\.(xlsx|xls)$/i, ''),
+    })
+
     uploadProgress.value = 100
+    showPreviewModal.value = false
+    previewData.value = {}
     await fetchDatasources()
 
-    // Navigate to report
     setTimeout(() => {
       router.push(`/reports/${data.report_id}`)
     }, 500)
   } catch (err) {
-    uploadError.value = err.response?.data?.detail || err.message || '上传失败'
+    uploadError.value = err.response?.data?.detail || err.message || '导入失败'
+    showPreviewModal.value = false
   } finally {
     uploading.value = false
     setTimeout(() => { uploadProgress.value = 0 }, 1000)

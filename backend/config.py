@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # Data Source
     TICKET_EXCEL_PATH: str = ""
 
+    # Memory (长记忆机制)
+    MEMORY_ENABLED: bool = True
+    MEMORY_AUTO_SAVE_HISTORY: bool = True
+    MEMORY_PREFERENCE_THRESHOLD: int = 3
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
