@@ -60,22 +60,6 @@ async def lifespan(app: FastAPI):
             print(f"Warning: LLM Provider 初始化失败: {e}，使用规则引擎兜底")
             llm_provider = None
 
-    # 启动 Flue Agent 子进程（如果启用）
-    flue_agent_process = None
-    if settings.FLUE_AGENT_ENABLED:
-        try:
-            import subprocess
-            flue_agent_dir = Path(__file__).parent.parent / "flue-agent"
-            flue_agent_process = subprocess.Popen(
-                ["node", "agent-server.js"],
-                cwd=str(flue_agent_dir),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            print(f"✓ Flue Agent 子进程已启动 (PID: {flue_agent_process.pid})")
-        except Exception as e:
-            print(f"Warning: Flue Agent 启动失败: {e}")
-
     intent_parser = IntentParser(llm_provider=llm_provider)
     skill_engine = SkillEngine(processor, llm_provider=llm_provider)
 
@@ -137,18 +121,6 @@ async def lifespan(app: FastAPI):
     # ─────────────────────────────────────────────────────
 
     yield
-
-    # 清理 Flue Agent 子进程
-    if flue_agent_process:
-        try:
-            flue_agent_process.terminate()
-            flue_agent_process.wait(timeout=5)
-            print("✓ Flue Agent 子进程已终止")
-        except Exception:
-            try:
-                flue_agent_process.kill()
-            except Exception:
-                pass
 
 
 app = FastAPI(

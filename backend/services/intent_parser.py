@@ -64,6 +64,16 @@ class IntentParser:
         context: ContextState,
         available_skills: list[dict] | None = None,
     ) -> dict:
+        # 优先使用 FlueProvider 的专用意图识别端点
+        if self.llm and hasattr(self.llm, 'parse_intent'):
+            try:
+                result = await self.llm.parse_intent(user_message)
+                if result and result.get('skill_id'):
+                    return result
+            except Exception as e:
+                print(f"[INTENT] parse_intent failed: {e}, falling back", flush=True)
+
+        # 其次用 LLM chat_completion（非 Flue 时走这个路径）
         if self._use_llm:
             try:
                 return await self._parse_with_llm(user_message, context, available_skills)

@@ -165,8 +165,8 @@ class SkillEngine:
 
         kpis = processor.get_summary_kpis(filters)
 
-        # ---- 状态分布 ----
-        if group_by == 'status' or chart_type == 'pie':
+        # ---- 状态分布（仅在未指定 group_by 或明确指定 status 时） ----
+        if group_by == 'status' or (not group_by and chart_type == 'pie'):
             dist = processor.get_status_distribution(filters)
             charts.append({
                 'id': 'chart_status',

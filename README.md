@@ -6,7 +6,7 @@
 
 ### 智能分析
 
-- **自然语言交互** — 支持中文提问，如"五月份各系统有多少工单？""哪些故障反复出现？"
+- **自然语言交互** — 支持中文提问，如"哪些故障反复出现？"
 - **日期智能识别** — 自动提取"五月份""上个月""最近一周""2026年3月"等时间范围
 - **Flue Agent 意图识别** — 基于 Markdown Agent 定义的 HTTP Agent Harness，支持 LLM + 规则双引擎
 - **LLM 深度分析** — 支持 DeepSeek / OpenAI / Claude / 本地模型等多种 LLM 后端
@@ -57,7 +57,7 @@
 | 前端 | Vue 3 + Vite + Pinia + Vue Router |
 | 图表 | ECharts 5 |
 | LLM | DeepSeek / OpenAI / Claude / vLLM 兼容 |
-| 认证 | JWT（支持本地 + IAM） |
+| 认证 | JWT |
 
 ## 快速开始
 
