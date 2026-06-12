@@ -165,6 +165,12 @@ async def chat(
     if intent.get('filters'):
         ctx = cm.update_context(session_id, intent['filters'])
 
+    # 如果新意图没有日期筛选，清除旧的日期筛选（避免累积）
+    intent_filters = intent.get('filters', {})
+    if 'date_from' not in intent_filters and 'date_to' not in intent_filters:
+        ctx.active_filters.pop('date_from', None)
+        ctx.active_filters.pop('date_to', None)
+
     # 执行 skill
     intent['message'] = req.message
     history_result = await db.execute(

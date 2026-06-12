@@ -55,9 +55,9 @@ async def lifespan(app: FastAPI):
             if settings.LLM_BASE_URL:
                 kwargs['base_url'] = settings.LLM_BASE_URL
             llm_provider = create_llm_provider(settings.LLM_PROVIDER, **kwargs)
-            print(f"✓ LLM Provider 已初始化: {settings.LLM_PROVIDER} / {settings.LLM_MODEL}")
+            print(f"[OK] LLM Provider initialized: {settings.LLM_PROVIDER} / {settings.LLM_MODEL}", flush=True)
         except Exception as e:
-            print(f"Warning: LLM Provider 初始化失败: {e}，使用规则引擎兜底")
+            print(f"Warning: LLM Provider init failed: {e}, using rule engine fallback", flush=True)
             llm_provider = None
 
     intent_parser = IntentParser(llm_provider=llm_provider)

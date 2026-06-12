@@ -70,8 +70,8 @@ class IntentParser:
                 result = await self.llm.parse_intent(user_message)
                 if result and result.get('skill_id'):
                     return result
-            except Exception as e:
-                print(f"[INTENT] parse_intent failed: {e}, falling back", flush=True)
+            except Exception:
+                pass
 
         # 其次用 LLM chat_completion（非 Flue 时走这个路径）
         if self._use_llm:
