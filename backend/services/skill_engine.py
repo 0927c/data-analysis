@@ -54,6 +54,7 @@ class SkillEngine:
             'ticket_analysis': self._handle_ticket_analysis,
             'data_query': self._handle_data_query,
             'report_export': self._handle_report_export,
+            'deep_analysis': self._handle_deep_analysis,
         }
         self._auto_discover_skills()
         self._register_chitchat()
@@ -79,6 +80,7 @@ class SkillEngine:
     def _auto_discover_skills(self):
         if not os.path.isdir(SKILLS_DIR):
             self._register_ticket_analysis()
+            self._register_deep_analysis()
             return
 
         for entry in sorted(os.listdir(SKILLS_DIR)):
@@ -105,6 +107,10 @@ class SkillEngine:
                 'handler': handler,
             })
 
+        # 始终注册深度分析（无论是否有外部 skill 定义）
+        if 'deep_analysis' not in self._skills:
+            self._register_deep_analysis()
+
     def _register_ticket_analysis(self):
         self.register_skill('ticket_analysis', {
             'name': '工单数据分析',
@@ -113,6 +119,16 @@ class SkillEngine:
             'category': 'analysis',
             'priority': 1,
             'handler': self._handle_ticket_analysis,
+        })
+
+    def _register_deep_analysis(self):
+        self.register_skill('deep_analysis', {
+            'name': '深度分析大师',
+            'description': '四阶段深度分析法：现状→根因→趋势→行动建议',
+            'enabled': True,
+            'category': 'analysis',
+            'priority': 0,  # 比 ticket_analysis 优先级更高
+            'handler': self._handle_deep_analysis,
         })
 
     def _register_chitchat(self):
@@ -663,6 +679,225 @@ class SkillEngine:
             'insights': insights,
             'data_table': data_table,
         }
+
+    # ===== 深度分析 Handler（数据分析大师） =====
+
+    async def _handle_deep_analysis(self, intent: dict) -> dict:
+        """四阶段深度分析法：现状→根因→趋势→行动建议。"""
+        processor = self._resolve_processor(intent)
+        user_message = intent.get('message', '')
+        filters = intent.get('filters', {})
+
+        if not processor:
+            return {
+                'message': '暂无可用数据源，请先上传 Excel 文件。',
+                'charts': [],
+                'insights': [],
+                'data_table': None,
+                'deep_insights': [],
+            }
+
+        # 1. 收集多维度数据
+        try:
+            kpis = processor.get_summary_kpis(filters)
+            status_dist = processor.get_status_distribution(filters)
+            sg_dist = processor.get_service_group_distribution(filters)
+            weekly_trend = processor.get_weekly_trend(filters)
+            monthly_trend = processor.get_monthly_trend(filters)
+            ops = processor.get_ops_quality_metrics(filters)
+            recurring = processor.get_recurring_tickets(filters)
+            root_cause = processor.get_fault_root_cause_analysis(filters)
+            behavior = processor.get_requester_behavior(filters)
+            eval_data = processor.get_evaluation_summary(filters)
+        except Exception as e:
+            return {
+                'message': f'数据获取失败: {e}',
+                'charts': [],
+                'insights': [],
+                'data_table': None,
+                'deep_insights': [],
+            }
+
+        # 2. 构建数据上下文
+        status_str = ', '.join([f"{l}:{v}件" for l, v in zip(status_dist['labels'][:5], status_dist['values'][:5])])
+        sg_str = ', '.join([f"{l}:{v}件" for l, v in zip(sg_dist['labels'][:5], sg_dist['values'][:5])])
+
+        weekly_vals = weekly_trend.get('values', [])
+        weekly_labels = weekly_trend.get('labels', [])
+        weekly_str = ', '.join([f"{l}:{v}" for l, v in zip(weekly_labels[-4:], weekly_vals[-4:])]) if weekly_vals else '无'
+
+        recurring_str = ''
+        if recurring.get('by_fault_group'):
+            top3 = recurring['by_fault_group'][:3]
+            recurring_str = ', '.join([f'"{d["cause"]}"({d["count"]}次)' for d in top3])
+
+        root_cause_str = ''
+        if root_cause.get('fault_top_n'):
+            top3 = root_cause['fault_top_n'][:3]
+            root_cause_str = ', '.join([f'"{f["cause"]}"({f["count"]}次)' for f in top3])
+
+        top_requester_str = ''
+        if behavior.get('top_requesters') and behavior['top_requesters']['values']:
+            req_top = list(zip(behavior['top_requesters']['labels'][:3], behavior['top_requesters']['values'][:3]))
+            top_requester_str = ', '.join([f'"{r[0]}"({r[1]}件)' for r in req_top])
+
+        dept_count = behavior.get('summary', {}).get('total_departments', 0)
+        requester_count = behavior.get('summary', {}).get('total_requesters', 0)
+
+        data_context = f"""【当前ITSM工单数据全景】
+总工单: {kpis['total']}件 | 已解决: {kpis['resolved_count']}件({kpis['resolved_ratio']}%)
+SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis['avg_resolution_days']}天
+挂起: {kpis['suspended_count']}件 | 退回: {kpis['returned_count']}件 | 撤单: {kpis['cancelled_count']}件
+状态分布: {status_str}
+服务组TOP5: {sg_str}
+近4周趋势: {weekly_str}
+重复工单TOP3: {recurring_str or '无'}
+根因TOP3: {root_cause_str or '无'}
+高频请求人TOP3: {top_requester_str or '无'}
+组织广度: {dept_count}个部门 / {requester_count}个请求人
+运维质量: 退回率{ops['returned_ratio']}% / 挂起率{ops['suspended_ratio']}% / 撤单率{ops['cancelled_ratio']}%
+满意度: 服务态度{round(float(eval_data.get('attitude_avg', 0)), 1)}分 / 技术{round(float(eval_data.get('tech_avg', 0)), 1)}分 / 时效{round(float(eval_data.get('response_avg', 0)), 1)}分({eval_data.get('eval_count', 0)}条)"""
+
+        # 3. 调用 LLM 进行深度分析
+        if not self.llm:
+            return {
+                'message': 'LLM 不可用，无法进行深度分析。',
+                'charts': [],
+                'insights': [],
+                'data_table': None,
+                'deep_insights': [],
+            }
+
+        system_prompt = f"""# Role: ITIL 顶级数据分析大师 & 运维总监
+
+## Profile
+你是一位拥有 15 年 ITIL 咨询经验的顶级数据分析大师。你精通统计学和趋势预测，能从工单数据中洞察企业 IT 架构的沉、人员效能瓶颈及潜在系统性风险。
+
+## Analysis Methodology (四阶段分析法)
+按以下结构输出深度洞察：
+
+1.  【现状扫描】：简明扼要总结当前数据核心特征。
+2. 🔍 【根因推导】：结合多维度交叉数据，推导根本原因。穿透到"人员技能、变更发布、设备老化、流程缺陷"层面。
+3. 📈 【趋势与主观预测】：
+   - 给出你作为专家的**主观判断**和推高/推低预测。
+   - 识别潜在风险（如：SLA将崩溃、某类故障有爆发趋势）。
+4.  【行动建议】：提供至少3条具体的、可落地的管理或技术建议（避免空话，要具体到"建议对XX团队进行某模块培训"）。
+
+## Tone & Style
+- 语气：专业、严谨、敏锐、一针见血。
+- 视角：管理层视角与技术专家视角结合。
+- 善用 Markdown 标题、加粗、列表。
+- 用 [🔥 暴增预警]、[🕵️ 隐性根因]、[🎯 黄金建议] 等标签对洞察分类。
+
+{data_context}
+
+请基于以上数据，对用户的问题进行四阶段深度分析。"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        chat_history = intent.get('chat_history', [])
+        for m in chat_history[-6:]:
+            messages.append({"role": m['role'], "content": m['content']})
+
+        messages.append({"role": "user", "content": user_message})
+
+        try:
+            response = await self.llm.chat_completion(messages, temperature=0.5, max_tokens=2048)
+        except Exception:
+            response = "抱歉，深度分析暂时不可用，请稍后再试。"
+
+        # 4. 同时生成常规图表（状态分布 + 趋势）
+        charts = []
+        if status_dist.get('labels'):
+            from backend.services.chart_renderer import render_pie, render_horizontal_bar, render_line
+            charts.append({
+                'id': 'chart_status',
+                'title': '工单状态分布',
+                'type': 'pie',
+                'option': render_pie(status_dist['labels'], status_dist['values']),
+            })
+        if weekly_trend.get('labels'):
+            charts.append({
+                'id': 'chart_weekly',
+                'title': '近4周工单趋势',
+                'type': 'line',
+                'option': render_line(weekly_trend['labels'], [{'name': '工单数', 'data': weekly_trend['values']}]),
+            })
+        if sg_dist.get('labels'):
+            charts.append({
+                'id': 'chart_sg',
+                'title': '服务组工单量 TOP5',
+                'type': 'horizontal_bar',
+                'option': render_horizontal_bar(sg_dist['labels'][:5], sg_dist['values'][:5]),
+            })
+
+        # 5. 从 LLM 响应中提取洞察卡片
+        deep_insights = self._extract_insight_cards(response)
+
+        return {
+            'message': response,
+            'charts': charts,
+            'insights': [],
+            'data_table': None,
+            'deep_insights': deep_insights,
+        }
+
+    def _extract_insight_cards(self, text: str) -> list[dict]:
+        """从 LLM 响应中提取结构化洞察卡片。"""
+        import re
+        cards = []
+
+        # 匹配 [🔥 xxx] 或 [🕵️ xxx] 或 [🎯 xxx] 格式的标签行
+        tag_pattern = r'\[([🔥🕵️🎯⚠️💡📊🔍📈]+)\s*([^\]]+)\]'
+        tag_map = {
+            '🔥': {'tag': '暴增预警', 'severity': 'danger'},
+            '🕵️': {'tag': '隐性根因', 'severity': 'warning'},
+            '🎯': {'tag': '黄金建议', 'severity': 'success'},
+            '⚠️': {'tag': '风险警示', 'severity': 'danger'},
+            '💡': {'tag': '行动建议', 'severity': 'info'},
+            '📊': {'tag': '现状扫描', 'severity': 'info'},
+            '🔍': {'tag': '根因推导', 'severity': 'warning'},
+            '': {'tag': '趋势预测', 'severity': 'info'},
+        }
+
+        # 按 emoji 标签分割文本
+        # 按行分割，找到每个标签行
+        lines = text.split('\n')
+        cards = []
+        current_card = None
+        current_content = []
+
+        for line in lines:
+            m = re.match(tag_pattern, line.strip())
+            if m:
+                # 保存上一个卡片
+                if current_card and current_content:
+                    current_card['content'] = '\n'.join(current_content).strip()[:500]
+                    cards.append(current_card)
+
+                emoji = m.group(1).strip()
+                tag_title = m.group(2).strip()
+                first_emoji = emoji[0] if emoji else ''
+                info = tag_map.get(first_emoji, {'tag': tag_title, 'severity': 'info'})
+
+                current_card = {
+                    'tag': info['tag'],
+                    'title': tag_title,
+                    'content': '',
+                    'severity': info['severity'],
+                }
+                current_content = []
+            elif current_card is not None:
+                current_content.append(line)
+
+        # 保存最后一个卡片
+        if current_card and current_content:
+            current_card['content'] = '\n'.join(current_content).strip()[:500]
+            cards.append(current_card)
+
+        return cards
 
     # ===== 智能问答 Handler =====
 

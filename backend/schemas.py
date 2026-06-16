@@ -48,6 +48,7 @@ class ChatResponse(BaseModel):
     report_id: Optional[int] = None
     active_datasources: Optional[list[dict]] = None
     memory_hints: Optional[list[str]] = None
+    deep_insights: Optional[list[dict]] = None  # 深度洞察卡片 [{tag, title, content, severity}]
 
 
 class SessionOut(BaseModel):

@@ -83,8 +83,8 @@ const TOOLS = [
         properties: {
           skill_id: {
             type: "string",
-            enum: ["ticket_analysis", "chitchat"],
-            description: "匹配到的技能ID",
+            enum: ["ticket_analysis", "deep_analysis", "chitchat"],
+            description: "匹配到的技能ID。ticket_analysis=常规数据查询/统计图表; deep_analysis=需要深度洞察、趋势预测、根因推导、行动建议的分析; chitchat=闲聊",
           },
           group_by: {
             type: "string",
@@ -147,11 +147,20 @@ const server = createServer(async (req, res) => {
 
       const systemPrompt = `你是一个ITSM工单系统的意图识别Agent。
 请判断用户的意图属于以下哪类：
-1. **ticket_analysis** — 用户想查询、分析工单数据（如：查看状态分布、各系统工单数、故障原因等）
-2. **chitchat** — 用户闲聊、问好、提问与数据无关的问题（如：你是谁、今天天气等）
+
+1. **deep_analysis** — 用户需要深度洞察、趋势预测、根因推导或行动建议。触发特征：
+   - 关键词："分析下"、"趋势"、"优化建议"、"怎么看"、"为什么"、"怎么样"
+   - 开放式提问："运维质量怎么样？"、"最近工单情况如何？"
+   - 跨维度请求："结合上个月，看看为什么网络工单变多了？"
+   - 预测/诊断："接下来会怎样？"、"有什么风险？"、"给出建议"
+   → 此类请求需要四阶段分析法（现状→根因→趋势→建议）
+
+2. **ticket_analysis** — 用户想查询具体数据或生成统计图表（如：查看状态分布、各系统工单数、故障原因排名等）。这是明确的数据查询请求。
+
+3. **chitchat** — 用户闲聊、问好、提问与数据无关的问题（如：你是谁、今天天气等）。
 
 如果是ticket_analysis，请进一步提取：
-- group_by: 按什么维度分组（status/service_group/assignee/department/source/fault_group/business_system/weekly/monthly/sla/resolver/recurring/root_cause/recurring/ops_quality/symptom_solution/requester/nature_trend）
+- group_by: 按什么维度分组（status/service_group/assignee/department/source/fault_group/business_system/weekly/monthly/sla/resolver/recurring/root_cause/ops_quality/symptom_solution/requester/nature_trend）
 - chart_type: 推荐图表类型（pie/bar/line/horizontal_bar/stacked_bar）
 - filters: 过滤条件，**必须提取日期筛选**：
   - 用户提到"五月份"/"5月" → filters.date_from="2026-05-01", filters.date_to="2026-05-31"
@@ -161,6 +170,11 @@ const server = createServer(async (req, res) => {
   - 用户提到"最近一周" → 7天前到今天
   - 用户提到"今年" → 今年1月1日到现在
   - 如果用户没有提到时间，不要添加date_from/date_to
+
+如果是deep_analysis，请提取：
+- group_by: 分析的主要维度（可选）
+- filters: 过滤条件（同上，必须提取日期）
+- analysis_depth: "deep"（标记为深度分析）
 
 **重要**：用户说"五月份有多少工单"时，必须提取date_from和date_to到filters中，而不是把group_by设为monthly！
 

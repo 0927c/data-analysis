@@ -316,6 +316,7 @@ async def chat(
         report_id=report_id,
         active_datasources=active_ds_info,
         memory_hints=memory_hints if memory_hints else None,
+        deep_insights=convert_numpy(result.get('deep_insights')) if result.get('deep_insights') else None,
     )
 
 

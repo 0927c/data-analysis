@@ -67,6 +67,7 @@ export const useChatStore = defineStore('chat', {
           charts: data.charts,
           insights: data.insights,
           data_table: data.data_table,
+          deep_insights: data.deep_insights,
           created_at: new Date().toISOString(),
         })
         return data
@@ -96,6 +97,7 @@ export const useChatStore = defineStore('chat', {
           charts: data.charts,
           insights: data.insights,
           data_table: data.data_table,
+          deep_insights: data.deep_insights,
           created_at: new Date().toISOString(),
         })
         return data

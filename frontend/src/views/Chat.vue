@@ -111,6 +111,8 @@
                   {{ insight }}
                 </div>
               </div>
+              <!-- Deep Insight Panel (数据分析大师) -->
+              <DeepInsightPanel v-if="msg.deep_insights && msg.deep_insights.length" :insights="msg.deep_insights" />
               <!-- Data Table -->
               <div v-if="msg.data_table" class="data-table">
                 <table>
@@ -205,6 +207,7 @@ import * as echarts from 'echarts'
 import { useAuthStore, useChatStore, useAnalyticsStore, useReportStore } from '@/store/index.js'
 import { useDatasourceStore } from '@/store/datasource.js'
 import KPICard from '@/components/KPICard.vue'
+import DeepInsightPanel from '@/components/DeepInsightPanel.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
