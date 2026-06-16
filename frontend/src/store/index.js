@@ -84,7 +84,6 @@ export const useChatStore = defineStore('chat', {
         if (sessionId) formData.append('session_id', sessionId)
 
         const { data } = await apiClient.post('/chat/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
           timeout: 120000,
         })
 
