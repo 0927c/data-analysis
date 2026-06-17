@@ -18,19 +18,28 @@ class FlueProvider(LLMProvider):
         from backend.config import settings
         agent_url = getattr(settings, "FLUE_AGENT_URL", None) or base_url
         self.base_url = agent_url.rstrip("/")
-        self.timeout = 60
+        self.timeout = 90
 
-    def _post(self, path: str, payload: dict) -> dict:
-        """发送 POST 请求到 Flue Agent。"""
+    def _post(self, path: str, payload: dict, max_retries: int = 2) -> dict:
+        """发送 POST 请求到 Flue Agent，支持重试。"""
         body = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self.base_url}{path}",
-            data=body,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        resp = urllib.request.urlopen(req, timeout=self.timeout)
-        return json.loads(resp.read().decode("utf-8"))
+        last_err = None
+        for attempt in range(max_retries):
+            try:
+                req = urllib.request.Request(
+                    f"{self.base_url}{path}",
+                    data=body,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                resp = urllib.request.urlopen(req, timeout=self.timeout)
+                return json.loads(resp.read().decode("utf-8"))
+            except Exception as e:
+                last_err = e
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(1)
+        raise last_err
 
     async def chat_completion(
         self,

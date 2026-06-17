@@ -180,34 +180,45 @@ const server = createServer(async (req, res) => {
 
 用户消息: "${message}"`;
 
-      const response = await client.chat.completions.create({
-        model: MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: message },
-        ],
-        tools: TOOLS,
-        tool_choice: "required",
-        temperature: 0.1,
-        max_tokens: 500,
-      });
+      try {
+        const response = await client.chat.completions.create({
+          model: MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message },
+          ],
+          tools: TOOLS,
+          tool_choice: "required",
+          temperature: 0.1,
+          max_tokens: 500,
+        });
 
-      const choice = response.choices[0];
-      let result;
+        const choice = response.choices[0];
+        let result;
 
-      if (choice.finish_reason === "tool_calls" && choice.message.tool_calls) {
-        const call = choice.message.tool_calls[0];
-        result = JSON.parse(call.function.arguments);
-      } else {
-        // Fallback
-        const content = choice.message.content || "";
-        result = {
-          skill_id: content.includes("ticket_analysis") ? "ticket_analysis" : "chitchat",
-          reasoning: content.slice(0, 200),
-        };
+        if (choice.finish_reason === "tool_calls" && choice.message.tool_calls) {
+          const call = choice.message.tool_calls[0];
+          result = JSON.parse(call.function.arguments);
+        } else {
+          const content = choice.message.content || "";
+          result = {
+            skill_id: content.includes("deep_analysis") ? "deep_analysis" : content.includes("ticket_analysis") ? "ticket_analysis" : "chitchat",
+            reasoning: content.slice(0, 200),
+          };
+        }
+
+        send(200, result);
+      } catch (err) {
+        console.error("Intent LLM error:", err.message);
+        // Fallback: 返回 ticket_analysis 避免流程中断
+        send(200, {
+          skill_id: "ticket_analysis",
+          group_by: "status",
+          chart_type: "pie",
+          filters: {},
+          reasoning: "LLM调用失败，使用默认分析模式",
+        });
       }
-
-      send(200, result);
       return;
     }
 
