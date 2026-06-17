@@ -6,10 +6,13 @@
 
 ### 智能分析
 
-- **自然语言交互** — 支持中文提问，如"哪些故障反复出现？"
+- **自然语言交互** — 支持中文提问，如"五月份各系统有多少工单？""哪些故障反复出现？"
 - **日期智能识别** — 自动提取"五月份""上个月""最近一周""2026年3月"等时间范围
-- **Flue Agent 意图识别** — 基于 Markdown Agent 定义的 HTTP Agent Harness，支持 LLM + 规则双引擎
+- **Flue Agent 意图识别** — 基于 Markdown Agent 定义的 HTTP Agent Harness，支持 `ticket_analysis` / `deep_analysis` / `chitchat` 三路由
 - **LLM 深度分析** — 支持 DeepSeek / OpenAI / Claude / 本地模型等多种 LLM 后端
+- **四阶段深度分析法** — 数据分析大师角色：现状扫描 → 根因推导 → 趋势预测 → 行动建议
+- **Markdown 富文本渲染** — AI 响应支持标题/加粗/列表/代码等格式化展示
+- **深度洞察面板** — 独立的深色专业风格卡片，标签化分类（暴增预警/隐性根因/黄金建议）
 - **自动洞察** — 规则驱动的数据洞察卡片（SLA 预警 / 重复告警 / 偏差检测）
 
 ### 长记忆机制
@@ -87,8 +90,9 @@ LLM_BASE_URL=https://api.deepseek.com
 LLM_MODEL=deepseek-chat
 LLM_API_KEY=sk-你的API密钥
 
-# 启用 Flue Agent（建议开启）
-FLUE_AGENT_ENABLED=True
+# Flue Agent 地址（Flue Agent 需单独启动）
+FLUE_AGENT_URL=http://localhost:3002
+FLUE_AGENT_ENABLED=false
 
 # 数据源
 TICKET_EXCEL_PATH=./data.xlsx
@@ -112,15 +116,20 @@ python scripts/create_test_users.py    # 可选：创建测试账号
 
 ### 4. 启动服务
 
+Flue Agent 需**单独启动**，不随后端自动启动：
+
 ```bash
-# 终端 1：启动后端（端口 8000，自动启动 Flue Agent 子进程）
+# 终端 1：启动 Flue Agent（端口 3002）
+cd flue-agent && node agent-server.js
+
+# 终端 2：启动后端（端口 8000）
 python run_backend.py
 
-# 终端 2：启动前端（端口 3000）
+# 终端 3：启动前端（端口 3000）
 cd frontend && npm run dev
 ```
 
-> `FLUE_AGENT_ENABLED=True` 时后端会自动启动 Flue Agent（端口 3002），无需单独启动。
+> Flue Agent 是独立的 Node.js 进程，后端通过 HTTP 调用其 `/agent/intent` 和 `/agent/chat` 端点。
 
 ### 5. 局域网访问
 
@@ -197,7 +206,8 @@ cd frontend && npm run dev
 │       │   ├── ChatInput.vue         # 输入框
 │       │   ├── KPICard.vue           # KPI 卡片
 │       │   ├── LoadingIndicator.vue  # 加载指示器
-│       │   └── DataSourceMappingPreview.vue  # 字段映射预览
+│       │   ├── DataSourceMappingPreview.vue  # 字段映射预览
+│       │   └── DeepInsightPanel.vue  # 深度洞察面板
 │       ├── store/                    # Pinia 状态
 │       │   ├── index.js              # auth / chat / analytics / report
 │       │   └── datasource.js         # 多数据源状态

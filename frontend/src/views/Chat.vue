@@ -96,7 +96,7 @@
           <div class="message-content">
             <p v-if="msg.role === 'user'" class="user-text">{{ msg.content }}</p>
             <template v-else>
-              <p class="agent-text">{{ msg.content }}</p>
+            <div class="agent-text" v-html="renderMarkdown(msg.content)"></div>
               <!-- Embedded Charts -->
               <div v-for="chart in (msg.charts || [])" :key="chart.id" class="chart-wrapper">
                 <div class="chart-header">
@@ -222,6 +222,42 @@ const messageContainer = ref(null)
 const inputEl = ref(null)
 const fileInput = ref(null)
 const selectedFile = ref(null)
+
+// Markdown 轻量渲染器
+function renderMarkdown(text) {
+  if (!text) return ''
+  let html = text
+    // 转义 HTML
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // 标题（从大到小，避免 #### 被 ### 先匹配）
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // 加粗（先处理，避免被列表误匹配）
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // 斜体
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // 行内代码
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    // 无序列表（支持缩进 + * 或 - 开头）
+    .replace(/^[\s]*[*-] (.+)$/gm, '<li>$1</li>')
+    // 水平线
+    .replace(/^---+$/gm, '<hr>')
+    // 换行
+    .replace(/\n/g, '<br>')
+
+  // 将连续的 <li> 包裹在 <ul> 中
+  html = html.replace(/((?:<li>.*?<\/li><br>?)+)/g, '<ul>$1</ul>')
+  // 清理多余的 <br> 在 ul 前后
+  html = html.replace(/<ul><br>/g, '<ul>').replace(/<br><\/ul>/g, '</ul>')
+  // 清理连续的 <br><br>
+  html = html.replace(/(<br>){3,}/g, '<br><br>')
+
+  return html
+}
 
 const chartInstances = new Map()
 
@@ -821,11 +857,87 @@ watch(() => chatStore.messages.length, () => {
 .agent-text {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--space-xs);
   font-size: var(--font-size-base);
   margin-bottom: var(--space-sm);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  line-height: 1.8;
+  color: var(--text);
+}
+
+.agent-text :deep(h1) {
+  font-size: 1.4em;
+  font-weight: 700;
+  margin: 1em 0 0.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid var(--accent);
+  color: var(--text);
+}
+
+.agent-text :deep(h2) {
+  font-size: 1.25em;
+  font-weight: 700;
+  margin: 1em 0 0.5em;
+  color: var(--text);
+}
+
+.agent-text :deep(h3) {
+  font-size: 1.1em;
+  font-weight: 700;
+  margin: 0.8em 0 0.4em;
+  color: var(--accent);
+}
+
+.agent-text :deep(h4) {
+  font-size: 1em;
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+  color: var(--text);
+  padding-left: 0.5em;
+  border-left: 3px solid var(--accent);
+}
+
+.agent-text :deep(strong) {
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(79, 140, 247, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.agent-text :deep(em) {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.agent-text :deep(code) {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+}
+
+.agent-text :deep(ul) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+  list-style-type: disc;
+}
+
+.agent-text :deep(li) {
+  margin: 0.3em 0;
+  line-height: 1.7;
+}
+
+.agent-text :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--card-border);
+  margin: 1em 0;
+}
+
+.agent-text :deep(p) {
+  margin: 0.5em 0;
 }
 
 .chart-wrapper {
