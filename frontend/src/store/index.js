@@ -54,8 +54,8 @@ export const useChatStore = defineStore('chat', {
       this.loading = true
       try {
         const { data } = await apiClient.post('/chat', { message, session_id: sessionId })
-        // 新会话时从响应中获取 session_id
-        if (!this.currentSessionId && data.session_id) {
+        // 始终更新 currentSessionId
+        if (data.session_id) {
           this.currentSessionId = data.session_id
         }
         // 用户消息已由 Chat.vue 添加，这里只添加 AI 响应

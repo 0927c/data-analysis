@@ -379,9 +379,9 @@ async function handleSend() {
     chatStore.messages.push({ role: 'user', content: `[上传文件] ${file.name}\n${displayText}`, created_at: new Date().toISOString() })
     clearFile()
     try {
-      const wasNewSession = !chatStore.currentSessionId
       const data = await chatStore.sendWithFile(file, displayText, chatStore.currentSessionId)
-      if (wasNewSession && data.session_id) {
+      // 始终保存 session_id
+      if (data.session_id) {
         chatStore.currentSessionId = data.session_id
         localStorage.setItem('lastSessionId', String(data.session_id))
         await chatStore.fetchSessions()
@@ -405,11 +405,12 @@ async function handleSend() {
   chatStore.messages.push({ role: 'user', content: text, created_at: new Date().toISOString() })
 
   try {
-    const wasNewSession = !chatStore.currentSessionId
     const data = await chatStore.sendMessage(text, chatStore.currentSessionId)
-    if (wasNewSession && data.session_id) {
+    // 始终保存 session_id 并刷新会话列表
+    if (data.session_id) {
       chatStore.currentSessionId = data.session_id
       localStorage.setItem('lastSessionId', String(data.session_id))
+      // 刷新会话列表（标题可能在后端更新）
       await chatStore.fetchSessions()
     }
     await nextTick()
