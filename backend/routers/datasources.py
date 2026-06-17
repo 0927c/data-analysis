@@ -99,7 +99,7 @@ async def delete_datasource(
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """删除数据源（有关联报表时禁止）。"""
+    """删除数据源（同时清理关联报表、处理器、文件）。"""
     from backend.models import Report
 
     result = await db.execute(select(DataSource).where(DataSource.id == ds_id))
@@ -107,12 +107,29 @@ async def delete_datasource(
     if not ds:
         raise HTTPException(status_code=404, detail="数据源不存在")
 
-    # 检查是否有关联报表
-    report_count = (await db.execute(
-        select(func.count()).select_from(Report).where(Report.datasource_id == ds_id)
-    )).scalar()
-    if report_count > 0:
-        raise HTTPException(status_code=400, detail=f"该数据源有 {report_count} 个关联报表，无法删除")
+    # 1. 删除关联报表
+    report_result = await db.execute(select(Report).where(Report.datasource_id == ds_id))
+    for report in report_result.scalars().all():
+        await db.delete(report)
+
+    # 2. 从处理器管理器中移除
+    try:
+        from backend.routers.chat import get_pm
+        pm = get_pm()
+        if pm:
+            pm.remove(ds_id)
+    except Exception:
+        pass
+
+    # 3. 删除上传的文件
+    if ds.file_path:
+        try:
+            from pathlib import Path
+            p = Path(ds.file_path)
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
 
     await db.delete(ds)
     await db.commit()

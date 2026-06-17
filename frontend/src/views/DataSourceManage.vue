@@ -161,9 +161,15 @@ async function handleRefresh(id) {
 }
 
 async function handleDelete(id) {
-  if (!confirm('确定删除此数据源？')) return
-  await apiClient.delete(`/datasources/${id}`)
-  await fetchDatasources()
+  const ds = datasources.value.find((d) => d.id === id)
+  const name = ds ? ds.name : '此数据源'
+  if (!confirm(`确定删除数据源「${name}」？\n\n关联的报表也会被一并删除。`)) return
+  try {
+    await apiClient.delete(`/datasources/${id}`)
+    await fetchDatasources()
+  } catch (e) {
+    alert(e.response?.data?.detail || '删除失败')
+  }
 }
 
 async function handleSave() {
