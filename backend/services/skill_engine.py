@@ -11,7 +11,10 @@ from backend.services.chart_renderer import (
     render_pie, render_bar, render_stacked_bar, render_horizontal_bar, render_rose, render_line,
 )
 
-SKILLS_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'harness', 'skills')
+SKILLS_DIRS = [
+    os.path.join(os.path.dirname(__file__), '..', '..', 'skills', 'user'),
+    os.path.join(os.path.dirname(__file__), '..', '..', 'skills', 'system'),
+]
 
 
 def _parse_skill_md(filepath: str) -> Optional[dict]:
@@ -78,37 +81,38 @@ class SkillEngine:
         return self.processor
 
     def _auto_discover_skills(self):
-        if not os.path.isdir(SKILLS_DIR):
+        found_any = False
+        for skills_dir in SKILLS_DIRS:
+            if not os.path.isdir(skills_dir):
+                continue
+            for entry in sorted(os.listdir(skills_dir)):
+                skill_dir = os.path.join(skills_dir, entry)
+                skill_md = os.path.join(skill_dir, 'SKILL.md')
+                if not os.path.isfile(skill_md):
+                    continue
+
+                meta = _parse_skill_md(skill_md)
+                if not meta:
+                    continue
+
+                sid = meta['id']
+                handler = self._handlers.get(sid)
+                if not handler:
+                    continue
+
+                self.register_skill(sid, {
+                    'name': meta.get('name', sid),
+                    'description': meta.get('description', ''),
+                    'enabled': meta.get('enabled', True),
+                    'category': meta.get('category', ''),
+                    'priority': meta.get('priority', 99),
+                    'handler': handler,
+                })
+                found_any = True
+
+        # fallback: 如果没有找到任何技能，注册内置的
+        if not found_any:
             self._register_ticket_analysis()
-            self._register_deep_analysis()
-            return
-
-        for entry in sorted(os.listdir(SKILLS_DIR)):
-            skill_dir = os.path.join(SKILLS_DIR, entry)
-            skill_md = os.path.join(skill_dir, 'SKILL.md')
-            if not os.path.isfile(skill_md):
-                continue
-
-            meta = _parse_skill_md(skill_md)
-            if not meta:
-                continue
-
-            sid = meta['id']
-            handler = self._handlers.get(sid)
-            if not handler:
-                continue
-
-            self.register_skill(sid, {
-                'name': meta.get('name', sid),
-                'description': meta.get('description', ''),
-                'enabled': meta.get('enabled', True),
-                'category': meta.get('category', ''),
-                'priority': meta.get('priority', 99),
-                'handler': handler,
-            })
-
-        # 始终注册深度分析（无论是否有外部 skill 定义）
-        if 'deep_analysis' not in self._skills:
             self._register_deep_analysis()
 
     def _register_ticket_analysis(self):

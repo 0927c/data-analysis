@@ -83,12 +83,12 @@ class SkillRouter:
         self._tool_map: dict[str, MCPTool] = {t.name: t for t in tools}
         self._default_agent_id = default_agent_id
 
-        # 支持单个或多个技能目录
+        # 两层技能目录：用户技能 + 系统技能
         if skills_dirs is None:
             if skills_dir is not None:
                 skills_dirs = [skills_dir]
             else:
-                skills_dirs = [Path("harness/skills")]
+                skills_dirs = [Path("skills/user"), Path("skills/system")]
 
         self._skills_dirs = skills_dirs
         self._skills: dict[str, SkillDefinition] = {}
