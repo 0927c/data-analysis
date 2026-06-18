@@ -88,7 +88,7 @@ class SkillRouter:
             if skills_dir is not None:
                 skills_dirs = [skills_dir]
             else:
-                skills_dirs = [Path("harness/skills"), Path(".claude/skills")]
+                skills_dirs = [Path("harness/skills")]
 
         self._skills_dirs = skills_dirs
         self._skills: dict[str, SkillDefinition] = {}
