@@ -153,22 +153,6 @@
         </div>
       </div>
 
-      <!-- Datasource Switcher -->
-      <div v-if="dsStore.canSwitch" class="datasource-switcher">
-        <span class="switch-label">当前数据源：</span>
-        <div class="ds-chips">
-          <button
-            v-for="ds in dsStore.activeDatasources"
-            :key="ds.id"
-            :class="['ds-chip', { active: dsStore.primaryDatasourceId === ds.id }]"
-            @click="handleDatasourceSwitch(ds.id)"
-          >
-            {{ ds.name }}
-            <span class="ds-count">({{ ds.record_count }}条)</span>
-          </button>
-        </div>
-      </div>
-
       <!-- Input Area -->
       <div class="input-area">
         <input
@@ -335,28 +319,6 @@ async function loadSession(sessionId) {
   localStorage.setItem('lastSessionId', String(sessionId))
   await chatStore.fetchMessages(sessionId)
   scrollToBottom()
-}
-
-async function handleDatasourceSwitch(datasourceId) {
-  if (dsStore.primaryDatasourceId === datasourceId) return
-
-  try {
-    const sessionId = chatStore.currentSessionId
-    if (sessionId) {
-      await dsStore.switchPrimaryRemote(sessionId, datasourceId)
-    } else {
-      dsStore.switchPrimary(datasourceId)
-    }
-    const ds = dsStore.datasources.find(d => d.id === datasourceId)
-    // 添加系统消息提示
-    chatStore.messages.push({
-      role: 'system',
-      content: `已切换到数据源: ${ds ? ds.name : datasourceId}`,
-      created_at: new Date().toISOString(),
-    })
-  } catch (err) {
-    console.error('切换数据源失败:', err)
-  }
 }
 
 function startNewChat() {
@@ -1104,54 +1066,7 @@ watch(() => chatStore.messages.length, () => {
   40% { transform: scale(1); opacity: 1; }
 }
 
-/* Datasource Switcher */
-.datasource-switcher {
-  padding: 8px var(--space-2xl);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-top: 1px solid var(--card-border);
-  background: rgba(79, 140, 247, 0.02);
-}
-
-.switch-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.ds-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.ds-chip {
-  padding: 4px 12px;
-  border-radius: 16px;
-  border: 1px solid var(--card-border);
-  background: var(--card-bg);
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.ds-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.ds-chip.active {
-  background: var(--gradient1);
-  color: white;
-  border-color: transparent;
-}
-
-.ds-count {
-  font-size: 10px;
-  opacity: 0.7;
-}
+/* Input Area */
 
 /* Input Area */
 .input-area {

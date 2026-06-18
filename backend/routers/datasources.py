@@ -93,6 +93,39 @@ async def refresh_datasource(
     return {"message": "数据源已刷新", "record_count": ds.record_count}
 
 
+@router.post("/{ds_id}/activate")
+async def activate_datasource(
+    ds_id: int,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """将指定数据源设为当前活跃数据源（其他数据源自动取消活跃）。"""
+    # 1. 将所有数据源设为 inactive
+    await db.execute(
+        __import__('sqlalchemy').update(DataSource).values(status='inactive')
+    )
+
+    # 2. 将目标数据源设为 active
+    result = await db.execute(select(DataSource).where(DataSource.id == ds_id))
+    ds = result.scalar_one_or_none()
+    if not ds:
+        raise HTTPException(status_code=404, detail="数据源不存在")
+
+    ds.status = 'active'
+
+    # 3. 更新处理器管理器
+    try:
+        from backend.routers.chat import get_pm
+        pm = get_pm()
+        if pm:
+            pm.set_primary(ds_id)
+    except Exception:
+        pass
+
+    await db.commit()
+    return {"message": f"已切换到数据源: {ds.name}", "datasource_id": ds_id}
+
+
 @router.delete("/{ds_id}")
 async def delete_datasource(
     ds_id: int,
@@ -467,6 +500,13 @@ async def upload_confirm(
         safe_name = re.sub(r'[^\w\-.]', '_', req.filename)
         perm_path = UPLOAD_DIR / f"{ts}_{safe_name}"
         shutil.move(str(temp_path), str(perm_path))
+
+        # 将其他数据源设为 inactive（单选模式）
+        await db.execute(
+            __import__('sqlalchemy').update(DataSource)
+            .where(DataSource.id != ds.id)
+            .values(status='inactive')
+        )
 
         # 创建 DataSource 记录
         ds = DataSource(

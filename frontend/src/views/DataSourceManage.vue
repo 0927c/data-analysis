@@ -58,10 +58,11 @@
         v-for="ds in datasources"
         :key="ds.id"
         class="datasource-card"
+        :class="{ 'is-active': ds.status === 'active' }"
       >
         <div class="ds-header">
           <h3>{{ ds.name }}</h3>
-          <span class="status-badge" :class="ds.status">{{ ds.status === 'active' ? '活跃' : '未激活' }}</span>
+          <span class="status-badge" :class="ds.status">{{ ds.status === 'active' ? '✓ 当前分析' : '未激活' }}</span>
         </div>
         <div class="ds-meta">
           <p>类型: {{ ds.type }}</p>
@@ -70,6 +71,13 @@
           <p>创建时间: {{ formatDate(ds.created_at) }}</p>
         </div>
         <div class="ds-actions">
+          <button
+            v-if="ds.status !== 'active'"
+            class="btn-activate"
+            @click="handleActivate(ds.id)"
+          >
+            设为当前分析
+          </button>
           <button class="btn-refresh" @click="handleRefresh(ds.id)" :disabled="ds.refreshing">
             {{ ds.refreshing ? '刷新中...' : '刷新数据' }}
           </button>
@@ -169,6 +177,15 @@ async function handleDelete(id) {
     await fetchDatasources()
   } catch (e) {
     alert(e.response?.data?.detail || '删除失败')
+  }
+}
+
+async function handleActivate(id) {
+  try {
+    await apiClient.post(`/datasources/${id}/activate`)
+    await fetchDatasources()
+  } catch (e) {
+    alert(e.response?.data?.detail || '切换失败')
   }
 }
 
@@ -451,6 +468,12 @@ async function handleConfirmImport(confirmedMapping) {
   box-shadow: var(--card-shadow-hover);
 }
 
+.datasource-card.is-active {
+  border-color: #00d464;
+  border-width: 2px;
+  box-shadow: 0 0 16px rgba(0, 212, 100, 0.15);
+}
+
 .ds-header {
   display: flex;
   align-items: center;
@@ -489,6 +512,24 @@ async function handleConfirmImport(confirmedMapping) {
   display: flex;
   gap: var(--space-sm);
   margin-top: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.btn-activate {
+  background: #00d464;
+  color: white;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-activate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 212, 100, 0.3);
 }
 
 .btn-refresh {
