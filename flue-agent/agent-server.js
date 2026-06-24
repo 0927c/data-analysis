@@ -23,7 +23,10 @@ process.on("unhandledRejection", (err) => {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..");
 const AGENTS_DIR = resolve(__dirname, "agents");
-const SKILLS_DIR = resolve(PROJECT_ROOT, "harness", "skills");
+const SKILLS_DIRS = [
+  resolve(PROJECT_ROOT, "skills", "user"),
+  resolve(PROJECT_ROOT, "skills", "system"),
+];
 
 // ── 初始化 OpenAI 客户端 ─────────────────────────────────
 const client = new OpenAI({
@@ -49,24 +52,26 @@ function loadAgentDefinition() {
   return meta;
 }
 
-// ── Skill 加载（从 Markdown 文件） ────────────────────────
+// ── Skill 加载（从两层 Markdown 文件） ────────────────────────
 function loadSkills() {
   const skills = {};
-  if (!existsSync(SKILLS_DIR)) return skills;
-  for (const entry of readdirSync(SKILLS_DIR)) {
-    const skillDir = resolve(SKILLS_DIR, entry);
-    if (!statSync(skillDir).isDirectory()) continue;
-    const mdPath = resolve(skillDir, "SKILL.md");
-    if (!existsSync(mdPath)) continue;
-    const content = readFileSync(mdPath, "utf-8");
-    const m = content.match(/^---\s*\n([\s\S]*?)\n---/);
-    if (!m) continue;
-    const meta = {};
-    for (const line of m[1].split("\n")) {
-      const idx = line.indexOf(":");
-      if (idx > 0) meta[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+  for (const SKILLS_DIR of SKILLS_DIRS) {
+    if (!existsSync(SKILLS_DIR)) continue;
+    for (const entry of readdirSync(SKILLS_DIR)) {
+      const skillDir = resolve(SKILLS_DIR, entry);
+      if (!statSync(skillDir).isDirectory()) continue;
+      const mdPath = resolve(skillDir, "SKILL.md");
+      if (!existsSync(mdPath)) continue;
+      const content = readFileSync(mdPath, "utf-8");
+      const m = content.match(/^---\s*\n([\s\S]*?)\n---/);
+      if (!m) continue;
+      const meta = {};
+      for (const line of m[1].split("\n")) {
+        const idx = line.indexOf(":");
+        if (idx > 0) meta[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+      }
+      if (meta.id) skills[meta.id] = { ...meta, content };
     }
-    if (meta.id) skills[meta.id] = { ...meta, content };
   }
   return skills;
 }
