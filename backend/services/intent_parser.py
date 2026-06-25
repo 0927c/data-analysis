@@ -125,7 +125,7 @@ class IntentParser:
 
 返回 JSON 格式:
 {{
-  "skill_id": "ticket_analysis" | "chitchat",
+  "skill_id": "ticket_analysis" | "deep_analysis" | "report_export" | "chitchat",
   "filters": {{"status": "...", "service_group": "...", "date_from": "2026-05-01", "date_to": "2026-05-31"}},
   "group_by": "status | service_group | root_cause | recurring | ops_quality | symptom_solution | requester | nature_trend | business_system",
   "chart_type": "bar | pie | line | stacked_bar | horizontal_bar | rose",
@@ -141,6 +141,7 @@ class IntentParser:
 - 用户询问各类性质占比 → group_by="nature_trend", chart_type="pie"
 - 用户询问各系统/业务系统 → group_by="business_system", chart_type="bar"
 - 如果用户问题与工单数据无关（闲聊、问天气等），skill_id 设为 "chitchat"
+- 如果用户要求导出/生成完整分析报告（"导出报告"、"下载报告"），skill_id 设为 "report_export"
 - **有日期时必须同时提取 date_from 和 date_to**
 - 仅返回 JSON，不要任何额外文字"""
 

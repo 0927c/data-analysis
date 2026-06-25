@@ -616,72 +616,186 @@ class SkillEngine:
             'data_table': data_table,
         }
 
-    # ===== 报告导出 Handler =====
+    # ===== 报告导出 Handler（五章节结构报告） =====
 
     async def _handle_report_export(self, intent: dict) -> dict:
+        """生成五章节结构化分析报告：摘要概览→产品线分析→原因分析→大客户分析→洞察建议。"""
         processor = self._resolve_processor(intent)
+        filters = intent.get('filters', {})
+        export_format = intent.get('format', 'html')
+
         if not processor:
             return {
                 'message': '暂无可用的数据源，请先上传 Excel 文件。',
                 'charts': [],
                 'insights': [],
                 'data_table': None,
+                'report_sections': [],
             }
 
-        filters = intent.get('filters', {})
-        kpis = processor.get_summary_kpis(filters)
+        try:
+            kpis = processor.get_summary_kpis(filters)
+            weekly_trend = processor.get_weekly_trend(filters)
+            monthly_trend = processor.get_monthly_trend(filters)
+            status_dist = processor.get_status_distribution(filters)
+            sg_dist = processor.get_service_group_distribution(filters)
+            fault_dist = processor.get_fault_group_distribution(filters)
+            cause_dist = processor.get_cause_category_distribution(filters)
+            biz_dist = processor.get_business_system_distribution(filters)
+            root_cause = processor.get_fault_root_cause_analysis(filters)
+            symptom = processor.get_symptom_solution_mapping(filters)
+            recurring = processor.get_recurring_tickets(filters)
+            requester = processor.get_requester_behavior(filters)
+            dept_dist = processor.get_department_distribution(filters)
+            ops = processor.get_ops_quality_metrics(filters)
+            eval_data = processor.get_evaluation_summary(filters)
+            insights = processor.generate_insights(filters)
+        except Exception as e:
+            return {
+                'message': f'数据获取失败: {e}',
+                'charts': [],
+                'insights': [],
+                'data_table': None,
+                'report_sections': [],
+            }
 
-        status_dist = processor.get_status_distribution(filters)
-        sg_dist = processor.get_service_group_distribution(filters)
-        assignee_dist = processor.get_assignee_distribution(filters)
-        weekly_trend = processor.get_weekly_trend(filters)
-        insights = processor.generate_insights(filters)
+        # ── 按章节构建图表 ────────────────────────────
+        charts = []
 
-        charts = [
-            {
-                'id': 'chart_status',
-                'title': '工单状态分布',
-                'type': 'pie',
-                'option': render_pie(status_dist['labels'], status_dist['values']),
-            },
-            {
-                'id': 'chart_sg',
-                'title': '服务组工单量',
-                'type': 'horizontal_bar',
-                'option': render_horizontal_bar(sg_dist['labels'], sg_dist['values']),
-            },
-            {
-                'id': 'chart_assignee',
-                'title': '责任人处理量',
-                'type': 'horizontal_bar',
-                'option': render_horizontal_bar(assignee_dist['labels'], assignee_dist['values']),
-            },
-        ]
+        # 章节1: 摘要概览
+        if status_dist.get('labels'):
+            charts.append({'id': 'ch1_status', 'title': '工单状态分布', 'type': 'pie', 'section': 1,
+                           'option': render_pie(status_dist['labels'], status_dist['values'])})
+        if weekly_trend.get('labels'):
+            charts.append({'id': 'ch1_weekly', 'title': '每周工单趋势', 'type': 'line', 'section': 1,
+                           'option': render_line(weekly_trend['labels'], [{'name': '工单数', 'data': weekly_trend['values']}])})
+        if monthly_trend.get('labels'):
+            charts.append({'id': 'ch1_monthly', 'title': '每月工单趋势', 'type': 'line', 'section': 1,
+                           'option': render_line(monthly_trend['labels'], [{'name': '工单数', 'data': monthly_trend['values']}])})
 
-        if weekly_trend['labels']:
-            charts.append({
-                'id': 'chart_weekly',
-                'title': '每周工单趋势',
-                'type': 'line',
-                'option': render_line(weekly_trend['labels'], [{'name': '工单数', 'data': weekly_trend['values']}]),
-            })
+        # 章节2: 产品线分析
+        if sg_dist.get('labels'):
+            charts.append({'id': 'ch2_sg', 'title': '服务组工单量排名', 'type': 'horizontal_bar', 'section': 2,
+                           'option': render_horizontal_bar(sg_dist['labels'], sg_dist['values'])})
+        if fault_dist.get('labels'):
+            charts.append({'id': 'ch2_fault', 'title': '故障原因分组', 'type': 'pie', 'section': 2,
+                           'option': render_pie(fault_dist['labels'], fault_dist['values'])})
+        if cause_dist.get('labels'):
+            charts.append({'id': 'ch2_cause', 'title': '原因类别分布', 'type': 'bar', 'section': 2,
+                           'option': render_bar(cause_dist['labels'], cause_dist['values'])})
+        if biz_dist.get('labels'):
+            charts.append({'id': 'ch2_biz', 'title': '业务系统分布', 'type': 'horizontal_bar', 'section': 2,
+                           'option': render_horizontal_bar(biz_dist['labels'], biz_dist['values'])})
 
-        data_table = {'headers': ['指标', '值'], 'rows': [
+        # 章节3: 原因分析
+        if root_cause.get('fault_top_n'):
+            top = root_cause['fault_top_n'][:15]
+            charts.append({'id': 'ch3_root', 'title': '故障根因 TOP15', 'type': 'horizontal_bar', 'section': 3,
+                           'option': render_horizontal_bar([t['cause'] for t in top], [t['count'] for t in top])})
+        if recurring.get('by_fault_group'):
+            top = recurring['by_fault_group'][:15]
+            charts.append({'id': 'ch3_recurring', 'title': '重复故障 TOP15', 'type': 'horizontal_bar', 'section': 3,
+                           'option': render_horizontal_bar([d['cause'] for d in top], [d['count'] for d in top])})
+        if symptom.get('clusters'):
+            clusters = symptom['clusters'][:15]
+            charts.append({'id': 'ch3_symptom', 'title': '症状方案聚类 TOP15', 'type': 'horizontal_bar', 'section': 3,
+                           'option': render_horizontal_bar([c['symptom'] for c in clusters], [c['count'] for c in clusters])})
+
+        # 章节4: 大客户分析
+        if requester.get('top_requesters') and requester['top_requesters']['values']:
+            charts.append({'id': 'ch4_requester', 'title': '高频请求人 TOP15', 'type': 'horizontal_bar', 'section': 4,
+                           'option': render_horizontal_bar(requester['top_requesters']['labels'][:15], requester['top_requesters']['values'][:15])})
+        if dept_dist.get('labels'):
+            charts.append({'id': 'ch4_dept', 'title': '请求部门分布', 'type': 'bar', 'section': 4,
+                           'option': render_bar(dept_dist['labels'], dept_dist['values'])})
+        if requester.get('org_distribution') and requester['org_distribution']['labels']:
+            charts.append({'id': 'ch4_org', 'title': '请求机构分布', 'type': 'horizontal_bar', 'section': 4,
+                           'option': render_horizontal_bar(requester['org_distribution']['labels'], requester['org_distribution']['values'])})
+
+        # ── 数据表 ───────────────────────────────────
+        kpi_table = {'headers': ['指标', '值'], 'rows': [
             ['总工单数', str(kpis['total'])],
-            ['已解决', f'{kpis["resolved_count"]}件 ({kpis["resolved_ratio"]}%)'],
-            ['SLA 达标率', f'{kpis["sla_ratio"]}%'],
-            ['SLA 平均', f'{kpis["sla_avg"]}%'],
-            ['挂起工单', f'{kpis["suspended_count"]}件 ({kpis["suspended_ratio"]}%)'],
-            ['平均解决天数', f'{kpis["avg_resolution_days"]}天'],
-            ['退回服务台', f'{kpis["returned_count"]}件'],
-            ['已评价', f'{kpis["evaluated_count"]}件 ({kpis["evaluated_ratio"]}%)'],
+            ['已解决', f"{kpis['resolved_count']}件 ({kpis['resolved_ratio']}%)"],
+            ['SLA 达标率', f"{kpis['sla_ratio']}%"],
+            ['SLA 平均', f"{kpis['sla_avg']}%"],
+            ['挂起工单', f"{kpis['suspended_count']}件 ({kpis['suspended_ratio']}%)"],
+            ['平均解决天数', f"{kpis['avg_resolution_days']}天"],
+            ['退回服务台', f"{kpis['returned_count']}件"],
+            ['撤单', f"{kpis['cancelled_count']}件"],
+            ['已评价', f"{kpis['evaluated_count']}件 ({kpis['evaluated_ratio']}%)"],
         ]}
 
+        ops_table = {'headers': ['指标', '值', '数量'], 'rows': [
+            ['退回率', f"{ops['returned_ratio']}%", f"{ops['returned_count']}件"],
+            ['挂起率', f"{ops['suspended_ratio']}%", f"{ops['suspended_count']}件"],
+            ['撤单率', f"{ops['cancelled_ratio']}%", f"{ops['cancelled_count']}件"],
+            ['SLA达标率', f"{ops['sla_ratio']}%", ''],
+            ['平均解决', f"{ops['avg_resolution_days']}天", ''],
+        ]}
+
+        root_cause_rows = []
+        if root_cause.get('fault_top_n'):
+            for t in root_cause['fault_top_n'][:20]:
+                root_cause_rows.append([t['cause'], str(t['count']), f"{t.get('pct', 0)}%"])
+        root_cause_table = {'headers': ['故障原因', '次数', '占比'], 'rows': root_cause_rows} if root_cause_rows else None
+
+        requester_rows = []
+        if requester.get('top_requesters') and requester['top_requesters']['values']:
+            for name, cnt in zip(requester['top_requesters']['labels'][:20], requester['top_requesters']['values'][:20]):
+                requester_rows.append([name, str(cnt)])
+        requester_table = {'headers': ['请求人', '工单数'], 'rows': requester_rows} if requester_rows else None
+
+        # ── 章节结构 ─────────────────────────────────
+        report_sections = [
+            {'id': 1, 'title': '摘要概览', 'description': 'KPI 指标、工单趋势、关键发现',
+             'charts': [c for c in charts if c.get('section') == 1], 'tables': [kpi_table]},
+            {'id': 2, 'title': '产品线分析', 'description': '各服务组工单量、故障原因分布、TOP 原因类别',
+             'charts': [c for c in charts if c.get('section') == 2], 'tables': []},
+            {'id': 3, 'title': '原因分析', 'description': '故障根因细分、重复故障、症状方案聚类',
+             'charts': [c for c in charts if c.get('section') == 3],
+             'tables': [root_cause_table] if root_cause_table else []},
+            {'id': 4, 'title': '大客户分析', 'description': '高频请求人 TOP 客户、部门/机构分布',
+             'charts': [c for c in charts if c.get('section') == 4],
+             'tables': [requester_table] if requester_table else []},
+            {'id': 5, 'title': '洞察建议', 'description': '数据驱动的改进建议',
+             'charts': [], 'tables': [ops_table], 'insights': insights},
+        ]
+
+        for c in charts:
+            c.pop('section', None)
+
+        # ── 导出文件 ─────────────────────────────────
+        from backend.services.export_service import export_html, export_excel
+        from pathlib import Path
+        title = intent.get('title', 'ITSM 工单分析报告')
+
+        if export_format == 'excel':
+            file_bytes = export_excel(title, kpi_table, kpis, insights, charts)
+            file_ext = 'xlsx'
+        else:
+            file_bytes = export_html(title, charts, insights, kpi_table, kpis['total'])
+            file_ext = 'html'
+
+        export_dir = Path(__file__).parent.parent / 'data' / 'exports'
+        export_dir.mkdir(parents=True, exist_ok=True)
+        from datetime import datetime
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_title = re.sub(r'[^\w\-]', '_', title)[:50]
+        file_path = export_dir / f'{ts}_{safe_title}.{file_ext}'
+        file_path.write_bytes(file_bytes)
+
         return {
-            'message': f'工单分析报告已生成。共 {kpis["total"]} 件工单，SLA 达标率 {kpis["sla_ratio"]}%。',
+            'message': f'{title}已生成。共 {kpis["total"]} 件工单，{len(charts)} 个图表，{len(insights)} 条洞察，5 章节。',
             'charts': charts,
             'insights': insights,
-            'data_table': data_table,
+            'data_table': kpi_table,
+            'report_sections': report_sections,
+            'export': {
+                'format': file_ext,
+                'file_path': str(file_path),
+                'file_size': len(file_bytes),
+                'title': title,
+            },
         }
 
     # ===== 深度分析 Handler（数据分析大师） =====

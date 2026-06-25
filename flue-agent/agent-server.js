@@ -88,8 +88,8 @@ const TOOLS = [
         properties: {
           skill_id: {
             type: "string",
-            enum: ["ticket_analysis", "deep_analysis", "chitchat"],
-            description: "匹配到的技能ID。ticket_analysis=常规数据查询/统计图表; deep_analysis=需要深度洞察、趋势预测、根因推导、行动建议的分析; chitchat=闲聊",
+            enum: ["ticket_analysis", "deep_analysis", "report_export", "chitchat"],
+            description: "匹配到的技能ID。ticket_analysis=常规数据查询/统计图表; deep_analysis=需要深度洞察、趋势预测、根因推导、行动建议的分析; report_export=生成完整分析报告(HTML/Excel导出); chitchat=闲聊",
           },
           group_by: {
             type: "string",
@@ -168,7 +168,11 @@ const server = createServer(async (req, res) => {
    - **反例**："今天天气怎么样" → chitchat（与工单无关）
    - **反例**："你的主要功能是什么" → chitchat（不是数据查询）
 
-3. **ticket_analysis** — 用户想查询具体工单数据或生成统计图表。
+3. **report_export** — 用户要求生成完整的分析报告并导出。
+   - 关键词："导出报告"、"生成报告"、"下载报告"、"完整分析报告"、"HTML报告"、"Excel报告"
+   - 示例："帮我生成一份分析报告"、"导出HTML报告"、"下载完整报告"
+
+4. **ticket_analysis** — 用户想查询具体工单数据或生成统计图表。
    - 示例："工单状态分布"、"各系统工单数"、"五月份有多少工单"
 
 如果是ticket_analysis，请进一步提取：
