@@ -27,11 +27,12 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 
+const emit = defineEmits(['click'])
+
 const props = defineProps({
   option: { type: Object, required: true },
   height: { type: String, default: '320px' },
   showToolbar: { type: Boolean, default: true },
-  onChartClick: { type: Function, default: null },
 })
 
 const chartRef = ref(null)
@@ -46,9 +47,7 @@ function initChart(el, option) {
   if (!el || !option) return
   const chart = echarts.init(el, 'complaint-light')
   chart.setOption(option, { notMerge: true })
-  if (props.onChartClick) {
-    chart.on('click', props.onChartClick)
-  }
+  chart.on('click', (params) => emit('click', params))
   window.addEventListener('resize', () => chart.resize())
   return chart
 }
@@ -90,9 +89,7 @@ async function toggleFullscreen() {
     if (fullscreenRef.value && props.option) {
       fullscreenInstance = echarts.init(fullscreenRef.value, 'complaint-light')
       fullscreenInstance.setOption(props.option, { notMerge: true })
-      if (props.onChartClick) {
-        fullscreenInstance.on('click', props.onChartClick)
-      }
+      fullscreenInstance.on('click', (params) => emit('click', params))
       await nextTick()
       fullscreenInstance.resize()
     }

@@ -909,7 +909,11 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
 
 {data_context}
 
-请基于以上数据，对用户的问题进行四阶段深度分析。"""
+请基于以上数据，对用户的问题进行四阶段深度分析。
+
+## 用户当前请求的分析维度
+用户要求分析的重点是：「{user_message}」
+请围绕这个维度进行深入分析，不要偏离主题。如果用户问的是某个具体维度（如故障根因、SLA趋势等），重点分析该维度的数据特征、根因和建议。"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -926,30 +930,331 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
         except Exception:
             response = "抱歉，深度分析暂时不可用，请稍后再试。"
 
-        # 4. 同时生成常规图表（状态分布 + 趋势）
+        # 4. 根据用户请求的分析维度动态生成图表
+        group_by = intent.get('group_by', '')
+        chart_type = intent.get('chart_type', '')
         charts = []
-        if status_dist.get('labels'):
-            from backend.services.chart_renderer import render_pie, render_horizontal_bar, render_line
+        data_table = None
+
+        from backend.services.chart_renderer import (
+            render_pie, render_bar, render_horizontal_bar, render_line,
+            render_stacked_bar, render_rose,
+        )
+
+        if group_by == 'root_cause':
+            # 故障根因分析 → 主图: 根因TOP15 + 可选: 重复故障 + 症状聚类
+            if root_cause.get('fault_top_n'):
+                top = root_cause['fault_top_n'][:15]
+                charts.append({
+                    'id': 'chart_root_cause',
+                    'title': '故障根因 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar([t['cause'] for t in top], [t['count'] for t in top]),
+                })
+                rows = [[t['cause'], str(t['count'])] for t in top]
+                data_table = {'headers': ['故障原因', '次数'], 'rows': rows}
+            if recurring.get('by_fault_group'):
+                top = recurring['by_fault_group'][:15]
+                charts.append({
+                    'id': 'chart_recurring',
+                    'title': '重复故障 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar([d['cause'] for d in top], [d['count'] for d in top]),
+                })
+            symptom_data = processor.get_symptom_solution_mapping(filters)
+            if symptom_data.get('clusters'):
+                clusters = symptom_data['clusters'][:15]
+                charts.append({
+                    'id': 'chart_symptom',
+                    'title': '症状→方案聚类 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar([c['symptom'] for c in clusters], [c['count'] for c in clusters]),
+                })
+
+        elif group_by == 'recurring':
+            if recurring.get('by_fault_group'):
+                top = recurring['by_fault_group'][:15]
+                charts.append({
+                    'id': 'chart_recurring',
+                    'title': '重复故障 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar([d['cause'] for d in top], [d['count'] for d in top]),
+                })
+                rows = [[d['cause'], str(d['count']), f'{d["pct"]}%'] for d in top]
+                data_table = {'headers': ['故障原因', '重复次数', '占比'], 'rows': rows}
+
+        elif group_by == 'status':
+            if status_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_status',
+                    'title': '工单状态分布',
+                    'type': 'pie',
+                    'option': render_pie(status_dist['labels'], status_dist['values']),
+                })
+                total = kpis['total'] or 1
+                rows = [[l, str(v), f'{round(v/total*100,1)}%'] for l, v in zip(status_dist['labels'], status_dist['values'])]
+                data_table = {'headers': ['状态', '数量', '占比'], 'rows': rows}
+
+        elif group_by == 'service_group':
+            if sg_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_sg',
+                    'title': '服务组工单量',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(sg_dist['labels'], sg_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(sg_dist['labels'], sg_dist['values'])]
+                data_table = {'headers': ['服务组', '工单数'], 'rows': rows}
+
+        elif group_by == 'weekly':
+            if weekly_trend.get('labels'):
+                charts.append({
+                    'id': 'chart_weekly',
+                    'title': '每周工单趋势',
+                    'type': 'line',
+                    'option': render_line(weekly_trend['labels'], [{'name': '工单数', 'data': weekly_trend['values']}]),
+                })
+                rows = [[l, str(v)] for l, v in zip(weekly_trend['labels'], weekly_trend['values'])]
+                data_table = {'headers': ['周', '工单数'], 'rows': rows}
+
+        elif group_by == 'monthly':
+            if monthly_trend.get('labels'):
+                charts.append({
+                    'id': 'chart_monthly',
+                    'title': '每月工单趋势',
+                    'type': 'line',
+                    'option': render_line(monthly_trend['labels'], [{'name': '工单数', 'data': monthly_trend['values']}]),
+                })
+                rows = [[l, str(v)] for l, v in zip(monthly_trend['labels'], monthly_trend['values'])]
+                data_table = {'headers': ['月', '工单数'], 'rows': rows}
+
+        elif group_by == 'sla':
+            sla_trend = processor.get_sla_weekly_trend(filters)
+            if sla_trend.get('labels'):
+                charts.append({
+                    'id': 'chart_sla_trend',
+                    'title': 'SLA 达标率周趋势',
+                    'type': 'line',
+                    'option': render_line(sla_trend['labels'], [{'name': 'SLA(%)', 'data': sla_trend['values']}]),
+                })
+                rows = [[l, f'{v}%'] for l, v in zip(sla_trend['labels'], sla_trend['values'])]
+                data_table = {'headers': ['周', 'SLA达标率'], 'rows': rows}
+
+        elif group_by == 'resolution_time':
+            buckets = processor.get_resolution_time_buckets(filters)
+            if buckets.get('labels'):
+                charts.append({
+                    'id': 'chart_res_time',
+                    'title': '解决时效分布',
+                    'type': 'bar',
+                    'option': render_bar(buckets['labels'], buckets['values']),
+                })
+                total = sum(buckets['values']) or 1
+                rows = [[l, str(v), f'{round(v/total*100,1)}%'] for l, v in zip(buckets['labels'], buckets['values'])]
+                data_table = {'headers': ['耗时', '数量', '占比'], 'rows': rows}
+
+        elif group_by == 'suspended':
+            sus = processor.get_suspended_breakdown(filters)
+            if sus.get('labels'):
+                charts.append({
+                    'id': 'chart_suspended',
+                    'title': '挂起原因分析',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(sus['labels'], sus['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(sus['labels'], sus['values'])]
+                data_table = {'headers': ['挂起原因', '数量'], 'rows': rows}
+
+        elif group_by == 'ops_quality':
             charts.append({
-                'id': 'chart_status',
-                'title': '工单状态分布',
-                'type': 'pie',
-                'option': render_pie(status_dist['labels'], status_dist['values']),
-            })
-        if weekly_trend.get('labels'):
-            charts.append({
-                'id': 'chart_weekly',
-                'title': '近4周工单趋势',
-                'type': 'line',
-                'option': render_line(weekly_trend['labels'], [{'name': '工单数', 'data': weekly_trend['values']}]),
-            })
-        if sg_dist.get('labels'):
-            charts.append({
-                'id': 'chart_sg',
-                'title': '服务组工单量 TOP5',
+                'id': 'chart_ops',
+                'title': '运维质量指标',
                 'type': 'horizontal_bar',
-                'option': render_horizontal_bar(sg_dist['labels'][:5], sg_dist['values'][:5]),
+                'option': render_horizontal_bar(
+                    ['退回率', '挂起率', '撤单率', 'SLA达标率'],
+                    [ops['returned_ratio'], ops['suspended_ratio'], ops['cancelled_ratio'], ops['sla_ratio']],
+                ),
             })
+            data_table = {'headers': ['指标', '值', '数量'], 'rows': [
+                ['退回服务台率', f'{ops["returned_ratio"]}%', f'{ops["returned_count"]}件'],
+                ['挂起率', f'{ops["suspended_ratio"]}%', f'{ops["suspended_count"]}件'],
+                ['撤单率', f'{ops["cancelled_ratio"]}%', f'{ops["cancelled_count"]}件'],
+                ['SLA达标率', f'{ops["sla_ratio"]}%', ''],
+                ['平均解决', f'{ops["avg_resolution_days"]}天', ''],
+            ]}
+
+        elif group_by == 'symptom_solution':
+            symptom_data = processor.get_symptom_solution_mapping(filters)
+            if symptom_data.get('clusters'):
+                clusters = symptom_data['clusters'][:15]
+                charts.append({
+                    'id': 'chart_symptom',
+                    'title': '症状→方案聚类 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar([c['symptom'] for c in clusters], [c['count'] for c in clusters]),
+                })
+                rows = []
+                for c in clusters:
+                    sol_str = ', '.join([s[0] for s in c.get('top_solutions', [])[:3]])
+                    rows.append([c['symptom'], str(c['count']), f'{c["avg_resolution_days"]}天', sol_str])
+                data_table = {'headers': ['症状', '次数', '平均解决', '推荐方案'], 'rows': rows}
+
+        elif group_by == 'requester':
+            if behavior.get('top_requesters') and behavior['top_requesters']['values']:
+                charts.append({
+                    'id': 'chart_requester',
+                    'title': '高频请求人 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(behavior['top_requesters']['labels'][:15], behavior['top_requesters']['values'][:15]),
+                })
+                rows = [[l, str(v)] for l, v in zip(behavior['top_requesters']['labels'][:15], behavior['top_requesters']['values'][:15])]
+                data_table = {'headers': ['请求人', '工单数'], 'rows': rows}
+            dept_dist = processor.get_department_distribution(filters)
+            if dept_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_req_dept',
+                    'title': '请求部门分布',
+                    'type': 'bar',
+                    'option': render_bar(dept_dist['labels'], dept_dist['values']),
+                })
+
+        elif group_by == 'assignee':
+            assignee_dist = processor.get_assignee_distribution(filters, top_n=15)
+            if assignee_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_assignee',
+                    'title': '责任人处理量 TOP15',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(assignee_dist['labels'], assignee_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(assignee_dist['labels'], assignee_dist['values'])]
+                data_table = {'headers': ['责任人', '工单数'], 'rows': rows}
+
+        elif group_by == 'department':
+            dept_dist = processor.get_department_distribution(filters)
+            if dept_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_dept',
+                    'title': '请求部门分布',
+                    'type': 'bar',
+                    'option': render_bar(dept_dist['labels'], dept_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(dept_dist['labels'], dept_dist['values'])]
+                data_table = {'headers': ['部门', '工单数'], 'rows': rows}
+
+        elif group_by == 'source_channel':
+            source_dist = processor.get_source_channel_distribution(filters)
+            if source_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_source',
+                    'title': '来源渠道分布',
+                    'type': 'pie',
+                    'option': render_pie(source_dist['labels'], source_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(source_dist['labels'], source_dist['values'])]
+                data_table = {'headers': ['渠道', '工单数'], 'rows': rows}
+
+        elif group_by == 'fault_group':
+            fault_dist = processor.get_fault_group_distribution(filters)
+            if fault_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_fault',
+                    'title': '故障原因分组',
+                    'type': 'pie',
+                    'option': render_pie(fault_dist['labels'], fault_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(fault_dist['labels'], fault_dist['values'])]
+                data_table = {'headers': ['故障分组', '工单数'], 'rows': rows}
+
+        elif group_by == 'cause_category':
+            cause_dist = processor.get_cause_category_distribution(filters)
+            if cause_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_cause',
+                    'title': '原因类别分布',
+                    'type': 'pie',
+                    'option': render_pie(cause_dist['labels'], cause_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(cause_dist['labels'], cause_dist['values'])]
+                data_table = {'headers': ['原因类别', '工单数'], 'rows': rows}
+
+        elif group_by == 'business_system':
+            biz_dist = processor.get_business_system_distribution(filters)
+            if biz_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_sys',
+                    'title': '业务系统分布',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(biz_dist['labels'], biz_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(biz_dist['labels'], biz_dist['values'])]
+                data_table = {'headers': ['业务系统', '工单数'], 'rows': rows}
+
+        elif group_by == 'resolver':
+            resolver_dist = processor.get_resolver_distribution(filters)
+            if resolver_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_resolver',
+                    'title': '解决人处理量',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(resolver_dist['labels'], resolver_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(resolver_dist['labels'], resolver_dist['values'])]
+                data_table = {'headers': ['解决人', '工单数'], 'rows': rows}
+
+        elif group_by == 'nature_trend':
+            nt = processor.get_nature_trend(filters)
+            dist = nt.get('distribution', {})
+            if dist.get('labels'):
+                charts.append({
+                    'id': 'chart_nature_pie',
+                    'title': '各类性质占比',
+                    'type': 'pie',
+                    'option': render_pie(dist['labels'], dist['values']),
+                })
+                total = sum(dist['values']) or 1
+                rows = [[l, str(v), f'{round(v/total*100,1)}%'] for l, v in zip(dist['labels'], dist['values'])]
+                data_table = {'headers': ['性质', '数量', '占比'], 'rows': rows}
+            if nt.get('trend', {}).get('series'):
+                charts.append({
+                    'id': 'chart_nature_trend',
+                    'title': '各类性质周趋势',
+                    'type': 'line',
+                    'option': render_line(nt['trend']['labels'], nt['trend']['series']),
+                })
+
+        elif group_by == 'cross':
+            ct = processor.get_status_by_service_group(filters)
+            charts.append({
+                'id': 'chart_cross',
+                'title': '服务组×状态交叉分析',
+                'type': 'stacked_bar',
+                'option': render_stacked_bar(ct['groups'], ct['statuses']),
+            })
+
+        # 无明确 group_by 时，回退到通用全景图
+        if not charts:
+            if status_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_status',
+                    'title': '工单状态分布',
+                    'type': 'pie',
+                    'option': render_pie(status_dist['labels'], status_dist['values']),
+                })
+            if weekly_trend.get('labels'):
+                charts.append({
+                    'id': 'chart_weekly',
+                    'title': '近4周工单趋势',
+                    'type': 'line',
+                    'option': render_line(weekly_trend['labels'], [{'name': '工单数', 'data': weekly_trend['values']}]),
+                })
+            if sg_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_sg',
+                    'title': '服务组工单量 TOP5',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(sg_dist['labels'][:5], sg_dist['values'][:5]),
+                })
 
         # 5. 从 LLM 响应中提取洞察卡片
         deep_insights = self._extract_insight_cards(response)
@@ -958,7 +1263,7 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
             'message': response,
             'charts': charts,
             'insights': [],
-            'data_table': None,
+            'data_table': data_table,
             'deep_insights': deep_insights,
         }
 

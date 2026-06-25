@@ -55,6 +55,7 @@ test_*.cjs
 
 # Claude settings (local)
 .claude/settings.local.json
+.claude
 
 # Compiled
 *.so

@@ -184,7 +184,11 @@ class TicketProcessor:
             if fkey in field_to_col:
                 col = field_to_col[fkey]
                 if col in filtered.columns:
-                    filtered = filtered[filtered[col] == fval]
+                    # 模糊匹配：支持 "PPM" 匹配 "PPM正式环境"
+                    if isinstance(fval, str):
+                        filtered = filtered[filtered[col].astype(str).str.contains(fval, na=False, case=False)]
+                    else:
+                        filtered = filtered[filtered[col] == fval]
             elif fkey == 'date_from' and 'created_at' in filtered.columns:
                 filtered = filtered[filtered['created_at'] >= pd.Timestamp(fval)]
             elif fkey == 'date_to' and 'created_at' in filtered.columns:
@@ -206,14 +210,14 @@ class TicketProcessor:
         total = len(df)
 
         # SLA 达标率
-        sla_qualified = len(df[df['sla_percent_num'] >= 100]) if 'sla_percent_num' in df.columns else 0
+        sla_qualified = len(df[df['sla_percent_num'] <= 100]) if 'sla_percent_num' in df.columns else 0
         sla_ratio = round(sla_qualified / total * 100, 1) if total else 0
 
         # SLA 平均
         sla_avg = round(df['sla_percent_num'].mean(), 1) if 'sla_percent_num' in df.columns else 0
 
-        # 已解决数
-        resolved_count = len(df[df['status'].isin(['已解决', '已关闭', '关闭'])]) if 'status' in df.columns else 0
+        # 已解决数（"结束"=已关闭也算解决）
+        resolved_count = len(df[df['status'].isin(['已解决', '已关闭', '关闭', '结束'])]) if 'status' in df.columns else 0
         resolved_ratio = round(resolved_count / total * 100, 1) if total else 0
 
         # 挂起数
@@ -716,7 +720,7 @@ class TicketProcessor:
         cancelled_ratio = round(cancelled_count / total * 100, 1) if total else 0
 
         # SLA 达标率
-        sla_qualified = len(df[df['sla_percent_num'] >= 100]) if 'sla_percent_num' in df.columns else 0
+        sla_qualified = len(df[df['sla_percent_num'] <= 100]) if 'sla_percent_num' in df.columns else 0
         sla_ratio = round(sla_qualified / total * 100, 1) if total else 0
 
         # 平均解决天数
@@ -728,7 +732,7 @@ class TicketProcessor:
             for w in sorted(df['created_week_label'].dropna().unique()):
                 sub = df[df['created_week_label'] == w]
                 s_total = len(sub)
-                s_sla = len(sub[sub['sla_percent_num'] >= 100]) if 'sla_percent_num' in sub.columns else 0
+                s_sla = len(sub[sub['sla_percent_num'] <= 100]) if 'sla_percent_num' in sub.columns else 0
                 s_returned = len(sub[sub['is_returned'] == '是']) if 'is_returned' in sub.columns else 0
                 s_suspended = len(sub[sub['is_suspended'] == '是']) if 'is_suspended' in sub.columns else 0
                 weekly_metrics.append({

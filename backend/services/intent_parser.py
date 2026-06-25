@@ -79,6 +79,10 @@ class IntentParser:
             try:
                 result = await self.llm.parse_intent(user_message)
                 if result and result.get('skill_id'):
+                    # 安全网：Flue 返回 chitchat 但消息包含明确分析关键词时，走规则引擎
+                    if result.get('skill_id') == 'chitchat' and self._has_analysis_keywords(user_message):
+                        print(f"[PARSER] Flue returned chitchat but message has analysis keywords, falling back to rules", flush=True)
+                        return self._parse_with_rules(user_message, context)
                     return result
             except Exception as e:
                 print(f"[PARSER] parse_intent failed: {e}, trying chat fallback", flush=True)
@@ -346,6 +350,19 @@ class IntentParser:
             'yo',
         ]
         return any(p in msg_lower for p in _short_chitchat)
+
+    @staticmethod
+    def _has_analysis_keywords(message: str) -> bool:
+        """检测消息是否包含明确的工单分析关键词（用于 Flue 误判 chitchat 时的安全网）。"""
+        msg_lower = message.lower()
+        _analysis_keywords = [
+            '故障', '根因', '工单', 'SLA', '状态', '分布', '趋势', '分析',
+            '排名', 'TOP', 'top', '占比', '服务组', '责任人', '部门', '系统',
+            '挂起', '解决', '退回', '撤单', '重复', '高频', '质量', '症状',
+            '方案', '请求人', '性质', '报表', '数据', '图表', '统计',
+            '多少', '几个', '总共', '一共', '运维', '原因', '渠道', '来源',
+        ]
+        return any(kw in msg_lower for kw in _analysis_keywords)
 
     def _parse_with_rules(self, user_message: str, context: ContextState) -> dict:
         msg = user_message.lower()

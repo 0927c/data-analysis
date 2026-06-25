@@ -4,27 +4,36 @@ from __future__ import annotations
 from typing import Optional
 
 
-# 暗色主题色板
+# 亮色主题色板（适配白色背景）
 COLORS = [
-    '#00d4ff', '#ff6b6b', '#ffd93d', '#6bcb77', '#9b59b6',
-    '#e67e22', '#1abc9c', '#e74c3c', '#3498db', '#f39c12',
-    '#2ecc71', '#8e44ad', '#16a085', '#d35400', '#2980b9',
-    '#c0392b', '#27ae60', '#7f8c8d',
+    '#2979ff', '#ff5252', '#ffab00', '#00c853', '#7c4dff',
+    '#ff6e40', '#00bfa5', '#d50000', '#1976d2', '#f57c00',
+    '#388e3c', '#651fff', '#00897b', '#e65100', '#1565c0',
+    '#c62828', '#2e7d32', '#757575',
 ]
 
+# 亮色主题：文字用深色，背景用白色
+TEXT_COLOR = '#1a2332'
+TEXT_SECONDARY = '#5a6a7a'
+AXIS_LINE_COLOR = '#d0d5dd'
+SPLIT_LINE_COLOR = '#e8ecf1'
+CARD_BORDER_COLOR = '#e2e6ed'
+TOOLTIP_BG = 'rgba(255, 255, 255, 0.96)'
+TOOLTIP_BORDER = '#e2e6ed'
+
 TOOLTIP_STYLE = {
-    'backgroundColor': 'rgba(26, 40, 55, 0.95)',
-    'borderColor': '#2a3f54',
+    'backgroundColor': TOOLTIP_BG,
+    'borderColor': TOOLTIP_BORDER,
     'borderWidth': 1,
-    'textStyle': {'color': '#e0e8f0', 'fontSize': 13},
+    'textStyle': {'color': TEXT_COLOR, 'fontSize': 13},
     'padding': [10, 14],
-    'extraCssText': 'box-shadow: 0 4px 16px rgba(0,0,0,0.3); border-radius: 8px;',
+    'extraCssText': 'box-shadow: 0 2px 12px rgba(0,0,0,0.1); border-radius: 8px;',
 }
 
 AXIS_STYLE = {
-    'axisLine': {'lineStyle': {'color': '#2a3f54'}},
-    'axisLabel': {'color': '#8899aa'},
-    'splitLine': {'lineStyle': {'color': '#1a2f44'}},
+    'axisLine': {'lineStyle': {'color': AXIS_LINE_COLOR}},
+    'axisLabel': {'color': TEXT_SECONDARY},
+    'splitLine': {'lineStyle': {'color': SPLIT_LINE_COLOR}},
 }
 
 ANIMATION_DEFAULTS = {
@@ -33,7 +42,7 @@ ANIMATION_DEFAULTS = {
 }
 
 
-def _gradient_bar(start: str = '#0099cc', end: str = '#00d4ff') -> dict:
+def _gradient_bar(start: str = '#2979ff', end: str = '#64b5f6') -> dict:
     return {
         'color': {
             'type': 'linear',
@@ -50,18 +59,18 @@ def render_horizontal_bar(labels: list, values: list, title: str = '', color: Op
     """横向柱状图（产品线分布等）。"""
     rev_labels = list(reversed(labels))
     rev_values = list(reversed(values))
-    grad = color or ('#0099cc', '#00d4ff')
+    grad = color or ('#2979ff', '#64b5f6')
     item_style = _gradient_bar(*grad) if isinstance(grad, tuple) else grad
 
     return {
         'tooltip': {'trigger': 'axis', 'axisPointer': {'type': 'shadow'}, **TOOLTIP_STYLE},
-        'grid': {'left': 80, 'right': 60, 'top': 10, 'bottom': 30},
+        'grid': {'left': 120, 'right': 60, 'top': 10, 'bottom': 30},
         'xAxis': {'type': 'value', **AXIS_STYLE},
         'yAxis': {
             'type': 'category',
             'data': rev_labels,
-            'axisLine': {'lineStyle': {'color': '#2a3f54'}},
-            'axisLabel': {'color': '#e0e8f0', 'fontSize': 12},
+            'axisLine': {'lineStyle': {'color': AXIS_LINE_COLOR}},
+            'axisLabel': {'color': TEXT_COLOR, 'fontSize': 13, 'fontWeight': 500},
         },
         'series': [{
             'type': 'bar',
@@ -70,8 +79,8 @@ def render_horizontal_bar(labels: list, values: list, title: str = '', color: Op
                 **item_style,
                 'borderRadius': [0, 4, 4, 0],
             },
-            'barWidth': 18,
-            'label': {'show': True, 'position': 'right', 'color': '#e0e8f0', 'fontSize': 11},
+            'barWidth': 20,
+            'label': {'show': True, 'position': 'right', 'color': TEXT_SECONDARY, 'fontSize': 12, 'fontWeight': 600},
             **ANIMATION_DEFAULTS,
         }],
     }
@@ -91,7 +100,7 @@ def render_pie(labels: list, values: list, title: str = '') -> dict:
         },
         'legend': {
             'orient': 'vertical', 'right': 10, 'top': 'center',
-            'textStyle': {'color': '#e0e8f0', 'fontSize': 12},
+            'textStyle': {'color': TEXT_COLOR, 'fontSize': 12},
             'itemWidth': 12, 'itemHeight': 12,
         },
         'series': [{
@@ -99,9 +108,9 @@ def render_pie(labels: list, values: list, title: str = '') -> dict:
             'radius': ['40%', '70%'],
             'center': ['40%', '50%'],
             'avoidLabelOverlap': True,
-            'itemStyle': {'borderRadius': 6, 'borderColor': '#1a2837', 'borderWidth': 2},
-            'label': {'show': True, 'color': '#e0e8f0', 'fontSize': 11, 'formatter': '{b}\n{d}%'},
-            'labelLine': {'lineStyle': {'color': '#2a3f54'}},
+            'itemStyle': {'borderRadius': 6, 'borderColor': '#fff', 'borderWidth': 2},
+            'label': {'show': True, 'color': TEXT_COLOR, 'fontSize': 12, 'formatter': '{b}\n{d}%', 'fontWeight': 500},
+            'labelLine': {'lineStyle': {'color': CARD_BORDER_COLOR}},
             'data': data,
             **ANIMATION_DEFAULTS,
         }],
@@ -116,11 +125,11 @@ def render_bar(labels: list, values: list, title: str = '', horizontal: bool = F
     item_style_data = []
     for i, v in enumerate(values):
         if v >= 200:
-            grad = _gradient_bar('#cc3333', '#ff6b6b')
+            grad = _gradient_bar('#d32f2f', '#ef5350')
         elif v >= 80:
-            grad = _gradient_bar('#cc8800', '#ffd93d')
+            grad = _gradient_bar('#f57c00', '#ffb74d')
         else:
-            grad = _gradient_bar('#0099cc', '#00d4ff')
+            grad = _gradient_bar('#2979ff', '#64b5f6')
         item_style_data.append({
             'value': v,
             'itemStyle': {**grad, 'borderRadius': [0, 4, 4, 0]},
@@ -128,19 +137,19 @@ def render_bar(labels: list, values: list, title: str = '', horizontal: bool = F
 
     return {
         'tooltip': {'trigger': 'axis', 'axisPointer': {'type': 'shadow'}, **TOOLTIP_STYLE},
-        'grid': {'left': 110, 'right': 60, 'top': 10, 'bottom': 30},
+        'grid': {'left': 120, 'right': 60, 'top': 10, 'bottom': 30},
         'xAxis': {'type': 'value', **AXIS_STYLE},
         'yAxis': {
             'type': 'category',
             'data': list(reversed(labels)),
-            'axisLine': {'lineStyle': {'color': '#2a3f54'}},
-            'axisLabel': {'color': '#e0e8f0', 'fontSize': 12},
+            'axisLine': {'lineStyle': {'color': AXIS_LINE_COLOR}},
+            'axisLabel': {'color': TEXT_COLOR, 'fontSize': 13, 'fontWeight': 500},
         },
         'series': [{
             'type': 'bar',
             'data': item_style_data,
-            'barWidth': 16,
-            'label': {'show': True, 'position': 'right', 'color': '#e0e8f0', 'fontSize': 11},
+            'barWidth': 18,
+            'label': {'show': True, 'position': 'right', 'color': TEXT_SECONDARY, 'fontSize': 12, 'fontWeight': 600},
             **ANIMATION_DEFAULTS,
         }],
     }
@@ -165,15 +174,15 @@ def render_stacked_bar(products: list, causes: dict, title: str = '') -> dict:
         'tooltip': {'trigger': 'axis', 'axisPointer': {'type': 'shadow'}, **TOOLTIP_STYLE},
         'legend': {
             'top': 0,
-            'textStyle': {'color': '#e0e8f0', 'fontSize': 11},
+            'textStyle': {'color': TEXT_COLOR, 'fontSize': 11},
             'itemWidth': 12, 'itemHeight': 12,
         },
         'grid': {'left': 50, 'right': 20, 'top': 40, 'bottom': 60},
         'xAxis': {
             'type': 'category',
             'data': products,
-            'axisLabel': {'color': '#e0e8f0', 'fontSize': 11, 'rotate': 30},
-            'axisLine': {'lineStyle': {'color': '#2a3f54'}},
+            'axisLabel': {'color': TEXT_COLOR, 'fontSize': 11, 'rotate': 30, 'fontWeight': 500},
+            'axisLine': {'lineStyle': {'color': AXIS_LINE_COLOR}},
         },
         'yAxis': {'type': 'value', **AXIS_STYLE},
         'series': series,
@@ -194,7 +203,7 @@ def render_rose(labels: list, values: list, title: str = '') -> dict:
         },
         'legend': {
             'orient': 'vertical', 'right': 0, 'top': 'middle',
-            'textStyle': {'color': '#e0e8f0', 'fontSize': 11},
+            'textStyle': {'color': TEXT_COLOR, 'fontSize': 11},
             'itemWidth': 10, 'itemHeight': 10,
         },
         'series': [{
@@ -202,8 +211,8 @@ def render_rose(labels: list, values: list, title: str = '') -> dict:
             'radius': ['35%', '65%'],
             'center': ['35%', '50%'],
             'roseType': 'radius',
-            'itemStyle': {'borderRadius': 5, 'borderColor': '#1a2837', 'borderWidth': 2},
-            'label': {'color': '#e0e8f0', 'fontSize': 10, 'formatter': '{b}'},
+            'itemStyle': {'borderRadius': 5, 'borderColor': '#fff', 'borderWidth': 2},
+            'label': {'color': TEXT_COLOR, 'fontSize': 11, 'formatter': '{b}', 'fontWeight': 500},
             'data': data,
             **ANIMATION_DEFAULTS,
         }],
@@ -241,15 +250,15 @@ def render_line(dates: list, series_list: list[dict], title: str = '') -> dict:
         'tooltip': {'trigger': 'axis', 'axisPointer': {'type': 'line'}, **TOOLTIP_STYLE},
         'legend': {
             'top': 0,
-            'textStyle': {'color': '#e0e8f0', 'fontSize': 12},
+            'textStyle': {'color': TEXT_COLOR, 'fontSize': 12},
             'itemWidth': 14, 'itemHeight': 14,
         },
         'grid': {'left': 60, 'right': 30, 'top': 40, 'bottom': 30},
         'xAxis': {
             'type': 'category',
             'data': dates,
-            'axisLabel': {'color': '#8899aa', 'fontSize': 11, 'rotate': 20},
-            'axisLine': {'lineStyle': {'color': '#2a3f54'}},
+            'axisLabel': {'color': TEXT_SECONDARY, 'fontSize': 11, 'rotate': 20},
+            'axisLine': {'lineStyle': {'color': AXIS_LINE_COLOR}},
         },
         'yAxis': {'type': 'value', **AXIS_STYLE},
         'series': series,
@@ -260,11 +269,11 @@ def render_gauge(value: float, max_val: float, title: str = '', label: str = '')
     """半圆仪表盘（KPI 指标）。"""
     pct = (value / max_val * 100) if max_val > 0 else 0
     if pct < 50:
-        color = '#6bcb77'
+        color = '#00c853'
     elif pct < 80:
-        color = '#ffd93d'
+        color = '#ffab00'
     else:
-        color = '#ff6b6b'
+        color = '#ff5252'
 
     return {
         'tooltip': {
@@ -283,9 +292,9 @@ def render_gauge(value: float, max_val: float, title: str = '', label: str = '')
                 'lineStyle': {
                     'width': 16,
                     'color': [
-                        (0.5, '#6bcb77'),
-                        (0.8, '#ffd93d'),
-                        (1, '#ff6b6b'),
+                        (0.5, '#00c853'),
+                        (0.8, '#ffab00'),
+                        (1, '#ff5252'),
                     ],
                 },
             },
@@ -293,18 +302,18 @@ def render_gauge(value: float, max_val: float, title: str = '', label: str = '')
                 'itemStyle': {'color': color},
                 'width': 4,
             },
-            'axisTick': {'distance': -16, 'length': 6, 'lineStyle': {'color': '#fff', 'width': 1}},
-            'splitLine': {'distance': -20, 'length': 14, 'lineStyle': {'color': '#fff', 'width': 2}},
-            'axisLabel': {'color': '#8899aa', 'fontSize': 11, 'distance': -12},
+            'axisTick': {'distance': -16, 'length': 6, 'lineStyle': {'color': TEXT_SECONDARY, 'width': 1}},
+            'splitLine': {'distance': -20, 'length': 14, 'lineStyle': {'color': TEXT_SECONDARY, 'width': 2}},
+            'axisLabel': {'color': TEXT_SECONDARY, 'fontSize': 11, 'distance': -12},
             'detail': {
                 'valueAnimation': True,
                 'formatter': '{value}',
-                'color': '#e0e8f0',
+                'color': TEXT_COLOR,
                 'fontSize': 28,
                 'fontWeight': 'bold',
                 'offsetCenter': [0, '30%'],
             },
-            'title': {'offsetCenter': [0, '60%'], 'color': '#8899aa', 'fontSize': 13},
+            'title': {'offsetCenter': [0, '60%'], 'color': TEXT_SECONDARY, 'fontSize': 13},
             'data': [{'value': value, 'name': label or title}],
             **ANIMATION_DEFAULTS,
         }],
@@ -341,13 +350,13 @@ def render_scatter(x_data: list, y_data: list, labels: list, title: str = '',
         'grid': {'left': 60, 'right': 30, 'top': 30, 'bottom': 40},
         'xAxis': {
             'name': x_label,
-            'nameTextStyle': {'color': '#8899aa'},
+            'nameTextStyle': {'color': TEXT_SECONDARY},
             'type': 'value',
             **AXIS_STYLE,
         },
         'yAxis': {
             'name': y_label,
-            'nameTextStyle': {'color': '#8899aa'},
+            'nameTextStyle': {'color': TEXT_SECONDARY},
             'type': 'value',
             **AXIS_STYLE,
         },

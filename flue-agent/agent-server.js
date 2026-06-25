@@ -93,7 +93,7 @@ const TOOLS = [
           },
           group_by: {
             type: "string",
-            description: "如果ticket_analysis，分组的维度",
+            description: "分组维度（ticket_analysis和deep_analysis都需要）：status/service_group/assignee/department/source_channel/fault_group/cause_category/business_system/weekly/monthly/sla/resolver/recurring/root_cause/ops_quality/symptom_solution/requester/nature_trend",
           },
           chart_type: {
             type: "string",
@@ -176,7 +176,7 @@ const server = createServer(async (req, res) => {
    - 示例："工单状态分布"、"各系统工单数"、"五月份有多少工单"
 
 如果是ticket_analysis，请进一步提取：
-- group_by: 按什么维度分组（status/service_group/assignee/department/source/fault_group/business_system/weekly/monthly/sla/resolver/recurring/root_cause/ops_quality/symptom_solution/requester/nature_trend）
+- group_by: 按什么维度分组（status/service_group/assignee/department/source_channel/fault_group/cause_category/business_system/weekly/monthly/sla/resolver/recurring/root_cause/ops_quality/symptom_solution/requester/nature_trend）
 - chart_type: 推荐图表类型（pie/bar/line/horizontal_bar/stacked_bar）
 - filters: 过滤条件，**必须提取日期筛选**：
   - 用户提到"五月份"/"5月" → filters.date_from="2026-05-01", filters.date_to="2026-05-31"
@@ -188,7 +188,7 @@ const server = createServer(async (req, res) => {
   - 如果用户没有提到时间，不要添加date_from/date_to
 
 如果是deep_analysis，请提取：
-- group_by: 分析的主要维度（可选）
+- group_by: 分析的主要维度（必须设置）：root_cause/recurring/ops_quality/symptom_solution/requester/sla/weekly/monthly 等
 - filters: 过滤条件（同上，必须提取日期）
 - analysis_depth: "deep"（标记为深度分析）
 

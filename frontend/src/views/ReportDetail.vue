@@ -50,7 +50,7 @@
             <h3 class="chart-title">{{ chart.title }}</h3>
           </div>
           <div class="chart-wrapper">
-            <ChartRenderer :option="chart.option" height="360px" />
+            <ChartRenderer :option="chart.option" height="360px" @click="(params) => handleDrillDown(chart, params)" />
           </div>
         </div>
       </section>
@@ -90,6 +90,39 @@
       </section>
     </div>
 
+    <!-- Drill-Down Modal -->
+    <Teleport to="body">
+      <div v-if="drillDown.visible" class="modal-overlay" @click.self="drillDown.visible = false">
+        <div class="modal-content drill-modal">
+          <div class="modal-header">
+            <h2>{{ drillDown.title }}</h2>
+            <span class="modal-subtitle">{{ drillDown.value }} — 共 {{ drillDown.total }} 条记录</span>
+            <button class="modal-close" @click="drillDown.visible = false">&times;</button>
+          </div>
+          <div class="drill-table-wrapper">
+            <table v-if="drillDown.headers.length">
+              <thead>
+                <tr>
+                  <th v-for="h in drillDown.headers" :key="h">{{ h }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, ri) in drillDown.rows" :key="ri">
+                  <td v-for="(cell, ci) in row" :key="ci" :title="cell">{{ cell }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="drill-empty">暂无数据</div>
+          </div>
+          <div v-if="drillDown.total > drillDown.pageSize" class="drill-pagination">
+            <button :disabled="drillDown.page <= 1" @click="loadDrillPage(drillDown.page - 1)">上一页</button>
+            <span>第 {{ drillDown.page }} / {{ Math.ceil(drillDown.total / drillDown.pageSize) }} 页</span>
+            <button :disabled="drillDown.page >= Math.ceil(drillDown.total / drillDown.pageSize)" @click="loadDrillPage(drillDown.page + 1)">下一页</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Export Modal -->
     <Teleport to="body">
       <div v-if="showExportModal" class="modal-overlay" @click.self="showExportModal = false">
@@ -127,6 +160,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useReportStore } from '@/store/index.js'
+import apiClient from '@/api/client.js'
 import ChartRenderer from '@/components/ChartRenderer.vue'
 import LoadingIndicator from '@/components/LoadingIndicator.vue'
 import PageNavBar from '@/components/PageNavBar.vue'
@@ -141,6 +175,19 @@ const exportOpts = ref({
   includeCharts: true,
   includeInsights: true,
   includeData: true,
+})
+
+// 下钻弹窗状态
+const drillDown = ref({
+  visible: false,
+  chartId: '',
+  value: '',
+  title: '',
+  total: 0,
+  page: 1,
+  pageSize: 50,
+  headers: [],
+  rows: [],
 })
 
 const tabs = computed(() => {
@@ -185,6 +232,44 @@ function parseJSON(str, fallback) {
 function severityLabel(sev) {
   const map = { critical: '严重', warning: '警告', info: '提示' }
   return map[sev] || sev || '提示'
+}
+
+function handleDrillDown(chart, params) {
+  // 从 ECharts click 事件提取分类值
+  const value = params?.name || params?.value
+  if (!value) return
+
+  drillDown.value = {
+    visible: true,
+    chartId: chart.id,
+    value: String(value),
+    title: chart.title,
+    total: 0,
+    page: 1,
+    pageSize: 50,
+    headers: [],
+    rows: [],
+  }
+  loadDrillPage(1)
+}
+
+async function loadDrillPage(page) {
+  try {
+    const { data } = await apiClient.get(`/reports/${report.value.id}/drill-down`, {
+      params: {
+        chart_id: drillDown.value.chartId,
+        value: drillDown.value.value,
+        page,
+        page_size: drillDown.value.pageSize,
+      },
+    })
+    drillDown.value.page = data.page
+    drillDown.value.total = data.total
+    drillDown.value.headers = data.headers
+    drillDown.value.rows = data.rows
+  } catch (e) {
+    console.error('下钻失败:', e)
+  }
 }
 
 async function doExportHtml() {
@@ -608,5 +693,82 @@ tbody tr:hover {
   padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-sm);
   font-weight: var(--font-weight-semibold);
+}
+
+/* Drill-down modal */
+.drill-modal {
+  width: 90vw;
+  max-width: 1100px;
+  max-height: 80vh;
+}
+
+.drill-table-wrapper {
+  overflow: auto;
+  max-height: 55vh;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+}
+
+.drill-table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.drill-table-wrapper th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 2px solid var(--card-border);
+  white-space: nowrap;
+}
+
+.drill-table-wrapper td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--card-border);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drill-table-wrapper tbody tr:hover {
+  background: rgba(79, 140, 247, 0.04);
+}
+
+.drill-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.drill-pagination button {
+  padding: 4px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.drill-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.drill-empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-tertiary);
 }
 </style>

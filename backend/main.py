@@ -19,6 +19,7 @@ from backend.routers.chat import set_globals as set_chat_globals
 from backend.routers.analytics import set_processor as set_analytics_processor
 from backend.routers.analytics import set_processor_manager as set_analytics_processor_manager
 from backend.routers.reports import set_processor as set_reports_processor
+from backend.routers.reports import set_processor_manager as set_reports_processor_manager
 
 
 @asynccontextmanager
@@ -108,6 +109,7 @@ async def lifespan(app: FastAPI):
     set_analytics_processor(processor)
     set_analytics_processor_manager(processor_manager)
     set_reports_processor(processor)
+    set_reports_processor_manager(processor_manager)
 
     # 存储到 app.state
     app.state.session_manager = session_mgr

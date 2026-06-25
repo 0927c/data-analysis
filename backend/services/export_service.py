@@ -20,9 +20,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <title>{{ title }}</title>
 <style>
   :root {
-    --bg: #0f1923; --bg-elevated: #152238; --card-bg: #1a2837; --card-border: #2a3f54;
-    --text: #e0e8f0; --text-secondary: #8899aa;
-    --accent: #00d4ff; --accent2: #ff6b6b; --accent3: #ffd93d; --accent4: #6bcb77;
+    --bg: #f5f7fa; --bg-elevated: #eef1f5; --card-bg: #ffffff; --card-border: #e2e6ed;
+    --text: #1a2332; --text-secondary: #5a6a7a;
+    --accent: #2979ff; --accent2: #ff5252; --accent3: #ffab00; --accent4: #00c853;
+    --gradient1: linear-gradient(135deg, #2979ff, #1565c0);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; line-height:1.6; }
@@ -95,7 +96,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     position:fixed; bottom:24px; right:24px; width:40px; height:40px;
     background:var(--gradient1); color:white; border:none; border-radius:50%;
     cursor:pointer; font-size:18px; display:none; align-items:center; justify-content:center;
-    box-shadow:0 4px 16px rgba(0,212,255,0.3); z-index:200;
+    box-shadow:0 4px 16px rgba(41,121,255,0.3); z-index:200;
   }
   .scroll-top.visible { display:flex; }
 
@@ -208,24 +209,24 @@ SEVERITY_LABELS = {'critical': '严重', 'warning': '警告', 'info': '关注'}
 
 # Excel style presets
 HEADER_FONT = Font(name='Microsoft YaHei', bold=True, color='FFFFFF', size=12)
-HEADER_FILL = PatternFill(start_color='1a2837', end_color='1a2837', fill_type='solid')
+HEADER_FILL = PatternFill(start_color='2979ff', end_color='2979ff', fill_type='solid')
 HEADER_ALIGN = Alignment(horizontal='center', vertical='center')
 BODY_FONT = Font(name='Microsoft YaHei', size=11)
 BODY_ALIGN = Alignment(horizontal='left', vertical='center')
-ALT_ROW_FILL = PatternFill(start_color='152238', end_color='152238', fill_type='solid')
-TITLE_FONT = Font(name='Microsoft YaHei', bold=True, size=24, color='00d4ff')
-SUBTITLE_FONT = Font(name='Microsoft YaHei', size=12, color='8899aa')
+ALT_ROW_FILL = PatternFill(start_color='f0f4ff', end_color='f0f4ff', fill_type='solid')
+TITLE_FONT = Font(name='Microsoft YaHei', bold=True, size=24, color='1a2332')
+SUBTITLE_FONT = Font(name='Microsoft YaHei', size=12, color='5a6a7a')
 KPI_FONT = Font(name='Microsoft YaHei', bold=True, size=14)
 THIN_BORDER = Border(
-    left=Side(style='thin', color='2a3f54'),
-    right=Side(style='thin', color='2a3f54'),
-    top=Side(style='thin', color='2a3f54'),
-    bottom=Side(style='thin', color='2a3f54'),
+    left=Side(style='thin', color='d0d5dd'),
+    right=Side(style='thin', color='d0d5dd'),
+    top=Side(style='thin', color='d0d5dd'),
+    bottom=Side(style='thin', color='d0d5dd'),
 )
 SEVERITY_FILLS = {
-    'critical': PatternFill(start_color='442222', end_color='442222', fill_type='solid'),
-    'warning': PatternFill(start_color='443311', end_color='443311', fill_type='solid'),
-    'info': PatternFill(start_color='112244', end_color='112244', fill_type='solid'),
+    'critical': PatternFill(start_color='ffebee', end_color='ffebee', fill_type='solid'),
+    'warning': PatternFill(start_color='fff8e1', end_color='fff8e1', fill_type='solid'),
+    'info': PatternFill(start_color='e3f2fd', end_color='e3f2fd', fill_type='solid'),
 }
 
 
