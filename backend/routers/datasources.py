@@ -502,9 +502,9 @@ async def upload_confirm(
         shutil.move(str(temp_path), str(perm_path))
 
         # 将其他数据源设为 inactive（单选模式）
+        from sqlalchemy import update as sa_update
         await db.execute(
-            __import__('sqlalchemy').update(DataSource)
-            .where(DataSource.id != ds.id)
+            sa_update(DataSource)
             .values(status='inactive')
         )
 
@@ -513,7 +513,7 @@ async def upload_confirm(
             name=ds_name,
             type='excel',
             config=json.dumps({'uploaded_path': str(perm_path)}, ensure_ascii=False),
-            field_mapping=json.dumps(custom_col_map, ensure_ascii=False),
+            field_mapping=json.dumps(custom_col_map, ensure_ascii=False) if custom_col_map else None,
             status='active',
             record_count=total,
             file_path=str(perm_path),
@@ -562,7 +562,7 @@ async def upload_confirm(
             ad = processor.get_assignee_distribution()
             charts.append(_build_chart(chart_renderer.render_horizontal_bar, 'horizontal_bar', 'assignee', '责任人处理量 TOP15', ad['labels'], ad['values']))
 
-        insights = processor.get_summary_kpis()
+        insights = processor.generate_insights()
         data_table = _build_data_table(processor, total)
 
         # 创建 Report
@@ -597,6 +597,8 @@ async def upload_confirm(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         # 清理临时文件
         if temp_path.exists():
             temp_path.unlink()

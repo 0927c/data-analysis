@@ -3,7 +3,6 @@ import axios from 'axios'
 const apiClient = axios.create({
   baseURL: '/api',
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
 })
 
 // Request interceptor: inject JWT token
@@ -41,7 +40,7 @@ apiClient.uploadFile = (url, file, onProgress) => {
   const formData = new FormData()
   formData.append('file', file)
   return apiClient.post(url, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': undefined },  // 让浏览器自动设置 multipart boundary
     timeout: 120000,
     onUploadProgress: onProgress,
   })

@@ -1,5 +1,6 @@
 <template>
   <div class="skill-page">
+    <PageNavBar />
     <header class="page-header">
       <h1>Skill 管理</h1>
     </header>
@@ -34,6 +35,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import apiClient from '@/api/client.js'
+import PageNavBar from '@/components/PageNavBar.vue'
 
 const skills = ref([])
 const loading = ref(false)

@@ -1,5 +1,6 @@
 <template>
   <div class="report-detail-page">
+    <PageNavBar />
     <header class="page-header">
       <div>
         <button class="btn-back" @click="$router.push('/reports')">&#x2190; 返回列表</button>
@@ -128,6 +129,7 @@ import { useRoute } from 'vue-router'
 import { useReportStore } from '@/store/index.js'
 import ChartRenderer from '@/components/ChartRenderer.vue'
 import LoadingIndicator from '@/components/LoadingIndicator.vue'
+import PageNavBar from '@/components/PageNavBar.vue'
 
 const route = useRoute()
 const reportStore = useReportStore()

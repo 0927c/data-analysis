@@ -64,6 +64,16 @@ class IntentParser:
         context: ContextState,
         available_skills: list[dict] | None = None,
     ) -> dict:
+        # ===== 本地 chitchat 预检测（快速路径，不走 LLM） =====
+        if self._is_chitchat(user_message):
+            return {
+                'skill_id': 'chitchat',
+                'action': 'chitchat',
+                'filters': {},
+                'group_by': '',
+                'chart_type': '',
+            }
+
         # 优先使用 FlueProvider 的专用意图识别端点
         if self.llm and hasattr(self.llm, 'parse_intent'):
             try:
@@ -272,6 +282,69 @@ class IntentParser:
             'date_from': start.strftime('%Y-%m-%d'),
             'date_to': now.strftime('%Y-%m-%d'),
         }
+
+    @staticmethod
+    def _is_chitchat(message: str) -> bool:
+        """本地快速检测：纯闲聊/问候/功能询问直接走 chitchat，不经过 LLM。
+
+        两层判断：
+        1. 命中明确的非数据意图模式 → chitchat
+        2. 短消息（<=20字）且不含任何工单/数据关键词 → chitchat
+        """
+        msg = message.strip()
+        msg_lower = msg.lower()
+
+        # ===== 第一层：明确的非数据意图模式（无论长短） =====
+        _definite_chitchat = [
+            # 问候
+            '你好', '您好', 'hi ', 'hello', 'hey',
+            '在吗', '在不在', '有人吗',
+            '早', '早上好', '晚上好', '中午好',
+            '嗨', '哈喽',
+            # 客套
+            '谢谢', '感谢', 'thanks', 'thank you',
+            '辛苦了',
+            '再见', '拜拜', 'bye', 'goodbye',
+            # 功能询问
+            '你是谁', '你叫什么', '介绍下你自己',
+            '你的功能', '你能做什么', '你能帮我', '你有什么用',
+            '主要功能', '你会什么',
+            # 无关话题
+            '天气', '现在几点', '今天几号',
+            '吃饭', '睡觉', '下班',
+        ]
+        if any(p in msg_lower for p in _definite_chitchat):
+            # 确认不含工单关键词（防止 "你好，工单状态分布" 被误判）
+            _ticket_keywords = [
+                '工单', '状态', '分布', '趋势', '分析', '报表', '排名', '占比',
+                '故障', 'SLA', '挂起', '解决', '部门', '来源', '渠道',
+                '服务组', '责任人', '处理人', '评价', '退回', '撤单', '根因',
+                '重复', '高频', '质量', '症状', '方案', '请求人', '性质',
+                '数据', '图表', '统计', '总共', '一共',
+            ]
+            if not any(kw in msg_lower for kw in _ticket_keywords):
+                return True
+
+        # ===== 第二层：短消息 + 无工单关键词 =====
+        if len(msg) > 20:
+            return False
+
+        _ticket_keywords_short = [
+            '工单', '状态', '分布', '趋势', '分析', '报表', '排名', '占比',
+            '故障', 'SLA', '挂起', '解决', '部门', '系统', '来源', '渠道',
+            '服务组', '责任人', '处理人', '评价', '退回', '撤单', '根因',
+            '重复', '高频', '质量', '症状', '方案', '请求人', '性质', '周', '月',
+            '数据', '图表', '统计', '多少', '几个', '总共', '一共',
+        ]
+        if any(kw in msg_lower for kw in _ticket_keywords_short):
+            return False
+
+        # 短消息且无工单关键词 → 闲聊
+        _short_chitchat = [
+            '嗯', '哦', '好的', 'ok', 'okay', '好的呢',
+            'yo',
+        ]
+        return any(p in msg_lower for p in _short_chitchat)
 
     def _parse_with_rules(self, user_message: str, context: ContextState) -> dict:
         msg = user_message.lower()

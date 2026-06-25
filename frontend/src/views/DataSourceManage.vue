@@ -1,5 +1,6 @@
 <template>
   <div class="datasource-page">
+    <PageNavBar />
     <header class="page-header">
       <h1>数据源管理</h1>
     </header>
@@ -121,6 +122,7 @@ import { useRouter } from 'vue-router'
 import apiClient from '@/api/client.js'
 import { useReportStore } from '@/store/index.js'
 import DataSourceMappingPreview from '@/components/DataSourceMappingPreview.vue'
+import PageNavBar from '@/components/PageNavBar.vue'
 
 const router = useRouter()
 const reportStore = useReportStore()

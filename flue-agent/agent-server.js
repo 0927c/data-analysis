@@ -151,18 +151,25 @@ const server = createServer(async (req, res) => {
       const { message, context } = body;
 
       const systemPrompt = `你是一个ITSM工单系统的意图识别Agent。
-请判断用户的意图属于以下哪类：
+请判断用户的意图属于以下哪类，**严格按优先级从高到低依次判断，不可跳级**：
 
-1. **deep_analysis** — 用户需要深度洞察、趋势预测、根因推导或行动建议。触发特征：
-   - 关键词："分析下"、"趋势"、"优化建议"、"怎么看"、"为什么"、"怎么样"
-   - 开放式提问："运维质量怎么样？"、"最近工单情况如何？"
-   - 跨维度请求："结合上个月，看看为什么网络工单变多了？"
-   - 预测/诊断："接下来会怎样？"、"有什么风险？"、"给出建议"
-   → 此类请求需要四阶段分析法（现状→根因→趋势→建议）
+1. **chitchat** — 最高优先级！只要消息不是明确在问工单/运维/IT数据相关的问题，一律归入此类。
+   - 问候语："你好"、"您好"、"hi"、"hello"、"在吗"、"早上好"、"嗨"、"哈喽"
+   - 客套话："谢谢"、"辛苦了"、"好的"、"再见"、"拜拜"
+   - 无关问题："你是谁"、"今天天气怎么样"、"现在几点"、"你叫什么名字"、"你能做什么"
+   - 功能询问："你的主要功能是什么"、"你能帮我做什么"
+   - 判断标准：消息中是否包含工单/数据/分析/报表/SLA/故障/运维 等关键词？**没有就一定是 chitchat**
 
-2. **ticket_analysis** — 用户想查询具体数据或生成统计图表（如：查看状态分布、各系统工单数、故障原因排名等）。这是明确的数据查询请求。
+2. **deep_analysis** — 仅当消息**明确涉及工单/运维数据**且需要深度洞察时才触发。
+   - 必须同时满足两个条件：
+     (a) 消息涉及工单/运维/IT系统等业务数据
+     (b) 用户要求深度分析、趋势预测、根因推导或行动建议
+   - 示例："分析下最近工单趋势"、"运维质量怎么样"、"为什么五月份故障变多了"
+   - **反例**："今天天气怎么样" → chitchat（与工单无关）
+   - **反例**："你的主要功能是什么" → chitchat（不是数据查询）
 
-3. **chitchat** — 用户闲聊、问好、提问与数据无关的问题（如：你是谁、今天天气等）。
+3. **ticket_analysis** — 用户想查询具体工单数据或生成统计图表。
+   - 示例："工单状态分布"、"各系统工单数"、"五月份有多少工单"
 
 如果是ticket_analysis，请进一步提取：
 - group_by: 按什么维度分组（status/service_group/assignee/department/source/fault_group/business_system/weekly/monthly/sla/resolver/recurring/root_cause/ops_quality/symptom_solution/requester/nature_trend）
@@ -181,7 +188,10 @@ const server = createServer(async (req, res) => {
 - filters: 过滤条件（同上，必须提取日期）
 - analysis_depth: "deep"（标记为深度分析）
 
-**重要**：用户说"五月份有多少工单"时，必须提取date_from和date_to到filters中，而不是把group_by设为monthly！
+**重要**：
+- 用户说"五月份有多少工单"时，必须提取date_from和date_to到filters中，而不是把group_by设为monthly！
+- "今天天气怎么样"、"你的主要功能是什么" → skill_id 必须是 "chitchat"
+- 只有消息明确包含工单/数据/运维/SLA等关键词时，才考虑 deep_analysis 或 ticket_analysis
 
 用户消息: "${message}"`;
 

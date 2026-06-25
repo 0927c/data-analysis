@@ -1,5 +1,6 @@
 <template>
   <div class="report-list-page">
+    <PageNavBar />
     <header class="page-header">
       <div>
         <h1>报表中心</h1>
@@ -81,6 +82,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useReportStore } from '@/store/index.js'
 import LoadingIndicator from '@/components/LoadingIndicator.vue'
+import PageNavBar from '@/components/PageNavBar.vue'
 
 const reportStore = useReportStore()
 const reports = ref([])
