@@ -69,6 +69,7 @@ CHART_DIM_MAP = {
     'chart_symptom': 'symptom',
     'chart_requester': 'requester',
     'chart_req_dept': 'requester_dept',
+    'chart_org': 'requester_org',
     'chart_nature_pie': 'nature',
     'chart_nature_trend': 'nature',
 }
@@ -76,7 +77,7 @@ CHART_DIM_MAP = {
 # 下钻时返回的关键列
 DRILL_COLUMNS = [
     'ticket_id', 'title', 'status', 'service_group', 'business_system',
-    'fault_group', 'fault_cause', 'requester', 'requester_dept',
+    'fault_group', 'fault_cause', 'requester', 'requester_dept', 'requester_org',
     'responsible_person', 'resolver', 'created_at', 'resolved_at',
     'source_channel', 'nature', 'sla_percent', 'is_suspended',
     'is_returned', 'is_cancelled', 'symptom', 'solution',
@@ -290,7 +291,7 @@ async def drill_down(
         "ticket_id": "工单编号", "title": "标题", "status": "状态",
         "service_group": "服务组", "business_system": "业务系统",
         "fault_group": "故障分组", "fault_cause": "故障原因",
-        "requester": "请求人", "requester_dept": "请求部门",
+        "requester": "请求人", "requester_dept": "请求部门", "requester_org": "请求人机构",
         "responsible_person": "责任人", "resolver": "解决人",
         "created_at": "创建时间", "resolved_at": "解决时间",
         "source_channel": "来源渠道", "nature": "性质",

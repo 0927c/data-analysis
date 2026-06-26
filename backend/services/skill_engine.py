@@ -238,6 +238,20 @@ class SkillEngine:
             })
             summary = f'共 {kpis["total"]} 件工单，涉及 {len(dist["labels"])} 个部门。'
 
+        # ---- 请求人机构分布 ----
+        elif group_by == 'org':
+            dist = processor.get_org_distribution(filters)
+            charts.append({
+                'id': 'chart_org',
+                'title': '请求人机构分布',
+                'type': 'bar',
+                'option': render_bar(dist['labels'], dist['values']),
+            })
+            summary = f'共 {kpis["total"]} 件工单，涉及 {len(dist["labels"])} 个机构。'
+            if dist['labels']:
+                rows = [[l, str(v)] for l, v in zip(dist['labels'], dist['values'])]
+                data_table = {'headers': ['机构', '工单数'], 'rows': rows}
+
         # ---- 来源渠道分布 ----
         elif group_by == 'source_channel':
             dist = processor.get_source_channel_distribution(filters)
@@ -533,6 +547,7 @@ class SkillEngine:
             'service_group_distribution': lambda f: (processor.get_service_group_distribution(f), 'horizontal_bar', '服务组工作量'),
             'assignee_distribution': lambda f: (processor.get_assignee_distribution(f, top_n=15), 'horizontal_bar', '责任人处理量'),
             'department_distribution': lambda f: (processor.get_department_distribution(f), 'bar', '部门分布'),
+            'org_distribution': lambda f: (processor.get_org_distribution(f), 'bar', '请求人机构分布'),
             'source_channel_distribution': lambda f: (processor.get_source_channel_distribution(f), 'pie', '来源渠道分布'),
             'fault_group_distribution': lambda f: (processor.get_fault_group_distribution(f), 'pie', '故障原因分组'),
             'cause_category_distribution': lambda f: (processor.get_cause_category_distribution(f), 'pie', '原因类别'),
@@ -1141,6 +1156,18 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
                 })
                 rows = [[l, str(v)] for l, v in zip(dept_dist['labels'], dept_dist['values'])]
                 data_table = {'headers': ['部门', '工单数'], 'rows': rows}
+
+        elif group_by == 'org':
+            org_dist = processor.get_org_distribution(filters)
+            if org_dist.get('labels'):
+                charts.append({
+                    'id': 'chart_org',
+                    'title': '请求人机构分布',
+                    'type': 'bar',
+                    'option': render_bar(org_dist['labels'], org_dist['values']),
+                })
+                rows = [[l, str(v)] for l, v in zip(org_dist['labels'], org_dist['values'])]
+                data_table = {'headers': ['机构', '工单数'], 'rows': rows}
 
         elif group_by == 'source_channel':
             source_dist = processor.get_source_channel_distribution(filters)

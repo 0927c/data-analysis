@@ -8,6 +8,7 @@ input_schema:
     status: string
     assignee: string
     department: string
+    org: string
     service_group: string
     source: string
     cause_category: string
@@ -25,6 +26,7 @@ routing_keywords:
   - 服务组
   - 责任人
   - 部门
+  - 机构
   - 来源
   - 故障原因
   - 根因
@@ -66,6 +68,7 @@ priority: 1
 | 服务组工作量 | service_group_distribution | horizontal_bar |
 | 责任人处理量 | assignee_distribution | horizontal_bar |
 | 部门分布 | department_distribution | bar |
+| 请求人机构分布 | org_distribution | bar |
 | 来源渠道分布 | source_channel_distribution | pie |
 | 故障原因分组 | fault_group_distribution | pie |
 | 每周趋势 | weekly_trend | line |

@@ -283,6 +283,13 @@ class TicketProcessor:
         counts = df['requester_dept'].value_counts()
         return {'labels': list(counts.index), 'values': [int(v) for v in counts.values]}
 
+    def get_org_distribution(self, filters: Optional[dict] = None) -> dict:
+        df = self._apply_filters(filters)
+        if 'requester_org' not in df.columns:
+            return {'labels': [], 'values': []}
+        counts = df['requester_org'].value_counts()
+        return {'labels': list(counts.index), 'values': [int(v) for v in counts.values]}
+
     def get_source_distribution(self, filters: Optional[dict] = None) -> dict:
         df = self._apply_filters(filters)
         if 'source' not in df.columns:

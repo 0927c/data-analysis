@@ -25,6 +25,7 @@ INTENT_GROUP_MAP = {
     '服务组': 'service_group',
     '责任人': 'assignee', '处理人': 'assignee', '谁处理': 'assignee',
     '部门': 'department', '请求部门': 'department',
+    '机构': 'org', '请求人机构': 'org', '所属机构': 'org',
     '来源': 'source_channel', '渠道': 'source_channel',
     '故障原因': 'fault_group', '故障分组': 'fault_group',
     '原因类别': 'cause_category', '原因': 'cause_category',
@@ -105,7 +106,7 @@ class IntentParser:
         system_prompt = f"""你是一个工单数据分析意图解析器。根据用户问题，提取结构化的查询意图，仅返回 JSON。
 
 可用技能: {json.dumps(available_skills or [{"id": "ticket_analysis", "name": "工单分析"}], ensure_ascii=False)}
-可用维度: status(状态), service_group(服务组), assignee(责任人), department(部门),
+可用维度: status(状态), service_group(服务组), assignee(责任人), department(部门), org(请求人机构),
   source_channel(来源渠道), fault_group(故障原因分组), cause_category(原因类别),
   business_system(业务系统), nature(性质/各类性质占比), resolver(解决人),
   resolution_method(处理方式), weekly(周趋势), monthly(月趋势), sla(SLA趋势),

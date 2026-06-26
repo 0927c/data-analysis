@@ -9,6 +9,7 @@ input_schema:
     assignee: string
     service_group: string
     department: string
+    org: string
     source: string
     source_channel: string
     cause_category: string
@@ -54,6 +55,7 @@ priority: 2
 | service_group_distribution | 服务组分布 | 服务组名称、工单量 |
 | assignee_distribution | 责任人处理量排名 | 责任人、工单数 |
 | department_distribution | 请求部门分布 | 部门名称、工单量 |
+| org_distribution | 请求人机构分布 | 机构名称、工单量 |
 | source_channel_distribution | 来源渠道分布 | 渠道名称、工单量 |
 | fault_group_distribution | 故障原因分组 | 故障类别、数量 |
 | cause_category_distribution | 原因类别分布 | 原因类别、数量 |
@@ -74,6 +76,7 @@ priority: 2
 - `assignee`: 责任人姓名（模糊匹配）
 - `service_group`: 所属服务组
 - `department`: 请求人部门
+- `org`: 请求人机构（模糊匹配）
 - `source`: 来源渠道
 - `cause_category`: 原因类别
 - `fault_group`: 故障原因分组
