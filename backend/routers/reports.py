@@ -43,6 +43,13 @@ def _get_active_processor() -> Optional[TicketProcessor]:
     return _processor
 
 
+def _get_report_processor(report) -> Optional[TicketProcessor]:
+    """获取报表对应的 processor（优先用报表绑定的数据源，其次用活跃数据源）。"""
+    if report.datasource_id is not None and _processor_manager:
+        return _processor_manager.get(report.datasource_id) or _get_active_processor()
+    return _get_active_processor()
+
+
 # chart_id → DataFrame 列名映射（用于下钻）
 CHART_DIM_MAP = {
     'chart_status': 'status',
@@ -186,7 +193,9 @@ async def export_report_html(
         charts = json.loads(report.chart_config or '[]')
         insights = json.loads(report.insights or '[]')
         data_table = json.loads(report.data_payload or '{}')
-        proc = get_processor()
+
+        proc = _get_report_processor(report)
+
         kpis = proc.get_summary_kpis() if proc else {'total': 0}
 
         html_bytes = export_html(
@@ -225,7 +234,8 @@ async def export_report_excel(
 
         data_table = json.loads(report.data_payload or '{}')
         insights = json.loads(report.insights or '[]')
-        proc = get_processor()
+
+        proc = _get_report_processor(report)
         kpis = proc.get_summary_kpis() if proc else {
             'total': 0, 'product_line_count': 0, 'unknown_count': 0,
             'unknown_ratio': 0, 'top_defect': 'N/A', 'top_defect_count': 0,
@@ -270,7 +280,9 @@ async def drill_down(
     if report.user_id != user.id and user.role != "admin":
         raise HTTPException(status_code=403, detail="无权访问")
 
-    proc = _get_active_processor()
+    # 优先使用报表绑定的数据源，其次用活跃数据源
+    proc = _get_report_processor(report)
+
     if not proc:
         raise HTTPException(status_code=503, detail="数据源不可用")
 
@@ -281,7 +293,8 @@ async def drill_down(
     if col not in proc.df.columns:
         raise HTTPException(status_code=400, detail=f"无法下钻: 列 '{col}' 不存在")
 
-    filtered = proc.df[proc.df[col].astype(str).str.contains(value, na=False, case=False)]
+    # 下钻必须用精确匹配（图表是 value_counts 精确分组），不能用模糊匹配
+    filtered = proc.df[proc.df[col].astype(str) == value]
     total = len(filtered)
 
     available_cols = [c for c in DRILL_COLUMNS if c in filtered.columns]

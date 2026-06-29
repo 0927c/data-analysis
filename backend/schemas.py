@@ -49,6 +49,7 @@ class ChatResponse(BaseModel):
     active_datasources: Optional[list[dict]] = None
     memory_hints: Optional[list[str]] = None
     deep_insights: Optional[list[dict]] = None  # 深度洞察卡片 [{tag, title, content, severity}]
+    active_filters: Optional[dict] = None  # 当前生效的筛选条件
 
 
 class SessionOut(BaseModel):

@@ -88,3 +88,9 @@ priority: 1
 | **请求人行为与组织分析** | requester_behavior | horizontal_bar + bar |
 | **运维质量指标** | ops_quality_metrics | horizontal_bar |
 | KPI 汇总 | summary_kpis | table |
+
+## 动态维度发现
+当用户查询的分析维度不在预设关键词范围内时（如"按紧急程度分析"），系统自动触发动态列发现：
+1. 在 DataFrame 列名中模糊匹配最接近的列
+2. 匹配成功 → 生成该维度的分布图表
+3. 匹配失败 → 返回友好提示，列出可用维度

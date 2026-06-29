@@ -64,13 +64,13 @@ def render_horizontal_bar(labels: list, values: list, title: str = '', color: Op
 
     return {
         'tooltip': {'trigger': 'axis', 'axisPointer': {'type': 'shadow'}, **TOOLTIP_STYLE},
-        'grid': {'left': 120, 'right': 60, 'top': 10, 'bottom': 30},
+        'grid': {'left': 140, 'right': 60, 'top': 10, 'bottom': 30},
         'xAxis': {'type': 'value', **AXIS_STYLE},
         'yAxis': {
             'type': 'category',
             'data': rev_labels,
             'axisLine': {'lineStyle': {'color': AXIS_LINE_COLOR}},
-            'axisLabel': {'color': TEXT_COLOR, 'fontSize': 13, 'fontWeight': 500},
+            'axisLabel': {'color': TEXT_COLOR, 'fontSize': 13, 'fontWeight': 500, 'width': 130, 'overflow': 'truncate'},
         },
         'series': [{
             'type': 'bar',
@@ -143,7 +143,7 @@ def render_bar(labels: list, values: list, title: str = '', horizontal: bool = F
             'type': 'category',
             'data': list(reversed(labels)),
             'axisLine': {'lineStyle': {'color': AXIS_LINE_COLOR}},
-            'axisLabel': {'color': TEXT_COLOR, 'fontSize': 13, 'fontWeight': 500},
+            'axisLabel': {'color': TEXT_COLOR, 'fontSize': 13, 'fontWeight': 500, 'width': 130, 'overflow': 'truncate'},
         },
         'series': [{
             'type': 'bar',

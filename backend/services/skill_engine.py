@@ -499,6 +499,43 @@ class SkillEngine:
                     'option': render_line(nt['trend']['labels'], nt['trend']['series']),
                 })
 
+        # ---- 动态维度：预设关键词未匹配时，自动在 DataFrame 列中查找最接近的维度 ----
+        elif group_by == '_dynamic':
+            unmatched = intent.get('unmatched_query', '')
+            dim_col = processor.find_dynamic_dimension(unmatched) if unmatched else None
+            if dim_col and dim_col in processor.df.columns:
+                counts = processor._apply_filters(filters)[dim_col].value_counts()
+                if len(counts) > 0:
+                    cn_name = dim_col
+                    for cn, en in processor.COL_MAP.items():
+                        if en == dim_col:
+                            cn_name = cn
+                            break
+                    charts.append({
+                        'id': f'chart_dynamic_{dim_col}',
+                        'title': f'{cn_name}分布',
+                        'type': 'horizontal_bar',
+                        'option': render_horizontal_bar(list(counts.index.astype(str)), [int(v) for v in counts.values]),
+                    })
+                    summary = f'按「{cn_name}」维度分析，共 {len(counts)} 个分类。（该维度为自动匹配，可在"维度管理"中确认永久添加）'
+                    rows = [[str(k), str(v)] for k, v in counts.items()]
+                    data_table = {'headers': [cn_name, '工单数'], 'rows': rows}
+                    # 标记待确认维度，供 chat router 记录到 DB
+                    sample_values = [str(v) for v in counts.index[:5].tolist()]
+                    intent['_pending_dimension'] = {
+                        'query_text': unmatched,
+                        'matched_column': dim_col,
+                        'matched_label': cn_name,
+                        'sample_values': sample_values,
+                        'group_by_suggestion': dim_col,
+                    }
+                else:
+                    summary = f'「{unmatched}」未找到对应数据。'
+            else:
+                available = [f'{cn}({en})' for cn, en in processor.ANALYSIS_DIMENSIONS.items()
+                             if en not in ('ticket_id', 'title', 'description', 'created_at', 'resolved_at')]
+                summary = f'未识别到分析维度「{unmatched}」。可用维度：{"、".join(available[:12])}'
+
         # ---- 默认：KPI 汇总 ----
         else:
             data_table = {'headers': ['指标', '值'], 'rows': [
@@ -1258,6 +1295,25 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
                 'type': 'stacked_bar',
                 'option': render_stacked_bar(ct['groups'], ct['statuses']),
             })
+
+        elif group_by == '_dynamic':
+            unmatched = intent.get('unmatched_query', '')
+            dim_col = processor.find_dynamic_dimension(unmatched) if unmatched else None
+            if dim_col and dim_col in processor.df.columns:
+                counts = processor._apply_filters(filters)[dim_col].value_counts()
+                cn_name = dim_col
+                for cn, en in processor.COL_MAP.items():
+                    if en == dim_col:
+                        cn_name = cn
+                        break
+                charts.append({
+                    'id': f'chart_dynamic_{dim_col}',
+                    'title': f'{cn_name}分布',
+                    'type': 'horizontal_bar',
+                    'option': render_horizontal_bar(list(counts.index.astype(str)), [int(v) for v in counts.values]),
+                })
+                rows = [[str(k), str(v)] for k, v in counts.items()]
+                data_table = {'headers': [cn_name, '工单数'], 'rows': rows}
 
         # 无明确 group_by 时，回退到通用全景图
         if not charts:

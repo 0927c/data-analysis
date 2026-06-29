@@ -14,7 +14,7 @@ from backend.services.ticket_processor import TicketProcessor, TicketProcessorMa
 from backend.services.conversation_manager import ConversationManager
 from backend.services.intent_parser import IntentParser
 from backend.services.skill_engine import SkillEngine
-from backend.routers import auth, chat, reports, datasources, skills, analytics
+from backend.routers import auth, chat, reports, datasources, skills, analytics, dimensions
 from backend.routers.chat import set_globals as set_chat_globals
 from backend.routers.analytics import set_processor as set_analytics_processor
 from backend.routers.analytics import set_processor_manager as set_analytics_processor_manager
@@ -146,6 +146,7 @@ app.include_router(reports.router, prefix="/api/reports", tags=["报表管理"])
 app.include_router(datasources.router, prefix="/api/datasources", tags=["数据源管理"])
 app.include_router(skills.router, prefix="/api/skills", tags=["Skill 管理"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["数据分析"])
+app.include_router(dimensions.router, prefix="/api/dimensions", tags=["维度管理"])
 
 
 @app.get("/api/health")

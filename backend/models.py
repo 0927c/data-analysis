@@ -55,6 +55,25 @@ class Report(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class PendingDimension(Base):
+    """待确认的分析维度 — 用户查询了预设映射表之外的维度时自动记录。"""
+    __tablename__ = "pending_dimensions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    query_text = Column(String(200), nullable=False)       # 用户原始查询（如"按紧急程度分析"）
+    matched_column = Column(String(100), nullable=False)    # 模糊匹配到的列名（英文）
+    matched_label = Column(String(100))                     # 列的中文名（从 COL_MAP 反查）
+    sample_values = Column(Text)                            # JSON: 该列的前5个去重值
+    usage_count = Column(Integer, default=1)                # 被查询的次数
+    status = Column(String(20), default="pending")          # pending / approved / rejected
+    approved_group_by = Column(String(50))                  # 用户批准后的 group_by key
+    reviewed_by = Column(Integer, ForeignKey("users.id"))   # 审核人
+    reviewed_at = Column(DateTime)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class DataSource(Base):
     __tablename__ = "datasources"
 

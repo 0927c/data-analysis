@@ -124,6 +124,59 @@ class TicketProcessor:
             return {**self.COL_MAP, **self._custom_col_map}
         return self.COL_MAP
 
+    def find_dynamic_dimension(self, query_text: str) -> Optional[str]:
+        """根据用户查询文本，在 DataFrame 列中模糊匹配最相关的维度列。
+
+        返回匹配的列名（英文），未匹配返回 None。
+        匹配策略：
+        1. 精确命中 ANALYSIS_DIMENSIONS 中文值 → 返回对应的 key
+        2. 模糊子串匹配列名（中文或英文）
+        3. 未匹配返回 None
+        """
+        if not query_text:
+            return None
+        text = query_text.lower().strip()
+        col_map = self._get_col_map()  # 中文列名 → 英文列名
+
+        # 策略1：精确匹配 ANALYSIS_DIMENSIONS 中文值
+        for dim_key, dim_cn in ANALYSIS_DIMENSIONS.items():
+            if dim_cn in query_text or dim_cn.lower() in text:
+                if dim_key in ('status', 'sla', 'suspended', 'returned', 'cancelled', 'evaluated'):
+                    continue  # 布尔/指标维度不做分组
+                return dim_key
+
+        # 策略2：子串匹配列名（中文→英文映射，以及英文列名直接匹配）
+        best_col = None
+        best_score = 0
+        for cn_col, en_col in col_map.items():
+            # 跳过时间、ID、文本类列
+            if en_col in ('ticket_id', 'title', 'description', 'created_at', 'resolved_at',
+                          'updated_at', 'updater', 'creator', 'remark1', 'process_chain',
+                          'eval_content', 'solution', 'requester_contact'):
+                continue
+            cn_lower = cn_col.lower()
+            en_lower = en_col.lower()
+            # 中文列名子串匹配
+            if cn_lower in text or text in cn_lower:
+                score = len(cn_lower)
+                if score > best_score:
+                    best_score = score
+                    best_col = en_col
+            # 英文列名字串匹配（如 "dept" in "requester_dept"）
+            elif en_lower in text or text in en_lower:
+                score = len(en_lower) * 0.8
+                if score > best_score:
+                    best_score = score
+                    best_col = en_col
+            # 列名拆分后的词匹配
+            elif any(part in text for part in cn_lower.replace('所属', '').replace('是否', '').replace('请求人', '') if len(part) >= 2):
+                score = 2
+                if score > best_score:
+                    best_score = score
+                    best_col = en_col
+
+        return best_col
+
     def _load(self):
         if not self.excel_path.exists():
             raise FileNotFoundError(f"Excel 文件不存在: {self.excel_path}")

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.dependencies import get_current_user
-from backend.models import User, Session, Message, Report, DataSource
+from backend.models import User, Session, Message, Report, DataSource, PendingDimension
 from backend.schemas import (
     ChatMessageRequest, ChatResponse, ChartData,
     SessionOut, MessageOut,
@@ -165,9 +165,11 @@ async def chat(
     if intent.get('filters'):
         ctx = cm.update_context(session_id, intent['filters'])
 
-    # 如果新意图没有日期筛选，清除旧的日期筛选（避免累积）
+    # 日期筛选管理：新意图没有日期时，仅在无其他筛选条件下才清除旧日期
+    # 这样多轮累积筛选（"五月份PPM工单"→"其中已解决的"）能正确保留日期范围
     intent_filters = intent.get('filters', {})
-    if 'date_from' not in intent_filters and 'date_to' not in intent_filters:
+    has_other_filters = any(k not in ('date_from', 'date_to') for k in ctx.active_filters)
+    if 'date_from' not in intent_filters and 'date_to' not in intent_filters and not has_other_filters:
         ctx.active_filters.pop('date_from', None)
         ctx.active_filters.pop('date_to', None)
 
@@ -225,9 +227,7 @@ async def chat(
         session.context_state = cm.save_state(session_id)
         session.updated_at = datetime.now(timezone.utc)
         await db.commit()
-        return ChatResponse(message=agent_content, session_id=session_id)
-
-    # 工单分析分支：生成报表
+        return ChatResponse(message=agent_content, session_id=session_id, active_filters=ctx.active_filters if ctx.active_filters else None)
     report_data = assemble_report(
         title=req.message[:100],
         charts=result['charts'],
@@ -266,6 +266,43 @@ async def chat(
             dimension = intent.get('group_by')
             if dimension:
                 await memory_svc.track_usage(user.id, dimension, {'datasource_id': ctx.primary_datasource_id})
+
+            # 记录待确认维度（动态匹配的维度）
+            pending_dim = intent.get('_pending_dimension')
+            if pending_dim:
+                from sqlalchemy import func as sa_func
+                existing = await db.execute(
+                    select(PendingDimension).where(
+                        PendingDimension.user_id == user.id,
+                        PendingDimension.matched_column == pending_dim['matched_column'],
+                        PendingDimension.status == 'pending',
+                    )
+                )
+                existing_pd = existing.scalar_one_or_none()
+                if existing_pd:
+                    existing_pd.usage_count = (existing_pd.usage_count or 1) + 1
+                else:
+                    pd = PendingDimension(
+                        user_id=user.id,
+                        query_text=pending_dim['query_text'],
+                        matched_column=pending_dim['matched_column'],
+                        matched_label=pending_dim['matched_label'],
+                        sample_values=json.dumps(pending_dim['sample_values'], ensure_ascii=False),
+                        group_by_suggestion=pending_dim['group_by_suggestion'],
+                    )
+                    db.add(pd)
+
+                # 同时写入维度待办清单文件
+                try:
+                    from backend.services.dimension_todo import todo_manager
+                    todo_manager.add_pending(
+                        query_text=pending_dim['query_text'],
+                        matched_column=pending_dim['matched_column'],
+                        matched_label=pending_dim['matched_label'],
+                        sample_values=pending_dim['sample_values'],
+                    )
+                except Exception:
+                    pass  # 文件写入失败不影响主流程
 
             # 更新对话摘要
             await memory_svc.update_session_summary(session_id, req.message, "user")
@@ -317,6 +354,7 @@ async def chat(
         active_datasources=active_ds_info,
         memory_hints=memory_hints if memory_hints else None,
         deep_insights=convert_numpy(result.get('deep_insights')) if result.get('deep_insights') else None,
+        active_filters=ctx.active_filters if ctx.active_filters else None,
     )
 
 

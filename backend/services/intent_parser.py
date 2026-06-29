@@ -8,6 +8,7 @@ from typing import Optional
 
 from backend.llm.base import LLMProvider
 from backend.services.conversation_manager import ContextState
+from backend.services import dimension_overrides
 
 
 # 意图关键词 → 图表类型
@@ -375,18 +376,23 @@ class IntentParser:
             filters.update(date_filters)
 
         # 检测 group_by（先排除已匹配为日期关键词的 "月"）
-        group_by = 'status'
+        group_by = None  # None 表示未匹配到预设维度
         # 如果已提取日期筛选，跳过"月"/"每月"/"月报"等趋势类关键词
         skip_date_keywords = set()
         if date_filters:
             skip_date_keywords = {'月', '每月', '月报'}
 
+        keyword_matched = False
         for kw, gb in sorted(INTENT_GROUP_MAP.items(), key=lambda x: -len(x[0])):
             if kw in skip_date_keywords:
                 continue
             if kw in msg:
                 group_by = gb
+                keyword_matched = True
                 break
+
+        # 预设关键词未匹配时，记录原始查询供动态列发现使用
+        unmatched_query = user_message if not keyword_matched else None
 
         # 检测图表类型
         chart_type = 'pie'
@@ -399,6 +405,24 @@ class IntentParser:
         if group_by in ('weekly', 'monthly', 'sla'):
             chart_type = 'line'
             group_by = 'weekly' if group_by == 'weekly' else group_by
+
+        # 预设维度未匹配 → 查覆盖层（用户已批准的维度）
+        if group_by is None:
+            # 尝试从覆盖层匹配
+            # 从用户消息中提取可能的维度关键词（去掉常见图表词后）
+            query_for_override = user_message
+            for chart_kw in INTENT_CHART_MAP.keys():
+                query_for_override = query_for_override.replace(chart_kw, '')
+            query_for_override = query_for_override.strip()
+
+            override_key = dimension_overrides.resolve_dimension(query_for_override)
+            if override_key:
+                group_by = override_key
+                keyword_matched = True  # 视为已匹配，不再走 _dynamic
+
+        # 预设维度未匹配 → 用 '_dynamic' 标记，由 SkillEngine 做动态列发现
+        if group_by is None:
+            group_by = '_dynamic'
 
         # 重置上下文检测
         if any(kw in msg for kw in ['重新开始', '新对话', '重置', '清空', '换一个']):
@@ -415,7 +439,7 @@ class IntentParser:
                            '多少件', '多少个', '有几件', '有几个', '是多少', '有多少']
         ticket_keywords = ['工单', '状态', '服务组', '责任人', '部门', '来源', '故障',
                           'SLA', '挂起', '评价', '解决', '趋势', '排名', '占比', '分布',
-                          '分析', '报表', '周报', '月报', '系统', '业务', '模块']
+                          '分析', '报表', '周报', '月报', '系统', '业务', '模块', '机构']
         is_explain_question = any(kw in msg for kw in explain_keywords)
         is_ticket = any(kw in msg for kw in ticket_keywords)
 
@@ -427,6 +451,7 @@ class IntentParser:
                 'group_by': group_by,
                 'chart_type': chart_type,
                 'action': 'query',
+                'unmatched_query': unmatched_query,
             }
 
         if not is_ticket and not filters:
@@ -444,4 +469,5 @@ class IntentParser:
             'group_by': group_by,
             'chart_type': chart_type,
             'action': 'query',
+            'unmatched_query': unmatched_query,
         }

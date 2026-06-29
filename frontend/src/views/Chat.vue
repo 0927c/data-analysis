@@ -97,6 +97,13 @@
             <p v-if="msg.role === 'user'" class="user-text">{{ msg.content }}</p>
             <template v-else>
             <div class="agent-text" v-html="renderMarkdown(msg.content)"></div>
+              <!-- Active Filters -->
+              <div v-if="msg.active_filters && Object.keys(msg.active_filters).length" class="filter-bar">
+                <span class="filter-label">筛选：</span>
+                <span v-for="(val, key) in msg.active_filters" :key="key" class="filter-chip">
+                  {{ filterLabel(key) }}: {{ val }}
+                </span>
+              </div>
               <!-- Embedded Charts -->
               <div v-for="chart in (msg.charts || [])" :key="chart.id" class="chart-wrapper">
                 <div class="chart-header">
@@ -206,6 +213,18 @@ const messageContainer = ref(null)
 const inputEl = ref(null)
 const fileInput = ref(null)
 const selectedFile = ref(null)
+
+// 筛选条件中文标签
+function filterLabel(key) {
+  const map = {
+    status: '状态', service_group: '服务组', business_system: '业务系统',
+    requester_dept: '请求部门', requester_org: '请求机构', assignee: '责任人',
+    resolver: '解决人', source_channel: '来源渠道', fault_group: '故障分组',
+    cause_category: '原因类别', nature: '性质', date_from: '起始日期',
+    date_to: '截止日期',
+  }
+  return map[key] || key
+}
 
 // Markdown 轻量渲染器
 function renderMarkdown(text) {
@@ -930,6 +949,35 @@ watch(() => chatStore.messages.length, () => {
 .chart-container {
   width: 100%;
   height: 320px;
+}
+
+/* Active Filters */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: var(--space-sm) 0;
+  padding: var(--space-xs) var(--space-sm);
+  background: rgba(79, 140, 247, 0.06);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+}
+
+.filter-label {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.filter-chip {
+  display: inline-block;
+  background: var(--accent);
+  color: white;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
 /* Insights */

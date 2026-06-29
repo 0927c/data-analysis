@@ -39,7 +39,20 @@
       "Bash(D:/miniconda3/python.exe test_export.py)",
       "Read(//e//**)",
       "Bash(python -c \"from backend.routers.datasources import router; print\\('Backend import OK'\\)\")",
-      "PowerShell(python -c \"from backend.routers.datasources import router; print\\('Backend import OK'\\)\")"
+      "PowerShell(python -c \"from backend.routers.datasources import router; print\\('Backend import OK'\\)\")",
+      "mcp__codegraph__*"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "codegraph prompt-hook"
+          }
+        ]
+      }
     ]
   }
 }
