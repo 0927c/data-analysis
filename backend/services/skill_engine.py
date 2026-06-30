@@ -894,7 +894,35 @@ class SkillEngine:
 
         weekly_vals = weekly_trend.get('values', [])
         weekly_labels = weekly_trend.get('labels', [])
+
+        # 环比计算：最近一周 vs 上一周
+        wow_change = ''
+        if len(weekly_vals) >= 2:
+            last_week = weekly_vals[-1]
+            prev_week = weekly_vals[-2]
+            if prev_week > 0:
+                change_pct = round((last_week - prev_week) / prev_week * 100, 1)
+                direction = '上升' if change_pct > 0 else '下降'
+                wow_change = f'{direction}{abs(change_pct)}%'
+            else:
+                wow_change = '新增'
+        wow_label = f' (环比{wow_change})' if wow_change else ''
+
+        # 近 4 周移动平均值
+        recent_4 = weekly_vals[-4:] if len(weekly_vals) >= 4 else weekly_vals
+        moving_avg = round(sum(recent_4) / len(recent_4), 1) if recent_4 else 0
+
+        # 本周 vs 移动平均偏离度
+        deviation = ''
+        if weekly_vals and moving_avg > 0:
+            dev_pct = round((weekly_vals[-1] - moving_avg) / moving_avg * 100, 1)
+            if abs(dev_pct) > 20:
+                deviation = f' (偏离均值{dev_pct}%, 异常)'
+            else:
+                deviation = f' (偏离均值{dev_pct}%, 正常)'
+
         weekly_str = ', '.join([f"{l}:{v}" for l, v in zip(weekly_labels[-4:], weekly_vals[-4:])]) if weekly_vals else '无'
+        weekly_str_with_avg = f'{weekly_str}\n近4周移动平均: {moving_avg}件/周{deviation}'
 
         recurring_str = ''
         if recurring.get('by_fault_group'):
@@ -914,19 +942,30 @@ class SkillEngine:
         dept_count = behavior.get('summary', {}).get('total_departments', 0)
         requester_count = behavior.get('summary', {}).get('total_requesters', 0)
 
+        # 数据周期说明
+        data_weeks = len(weekly_vals)
+        if data_weeks >= 52:
+            period_note = f'数据跨度{data_weeks}周（约{data_weeks//52}年），支持同比分析'
+        elif data_weeks >= 4:
+            period_note = f'数据跨度{data_weeks}周，支持环比分析，无去年同期数据'
+        else:
+            period_note = f'数据跨度仅{data_weeks}周，数据量有限，预测置信度较低'
+
         data_context = f"""【当前ITSM工单数据全景】
 总工单: {kpis['total']}件 | 已解决: {kpis['resolved_count']}件({kpis['resolved_ratio']}%)
 SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis['avg_resolution_days']}天
 挂起: {kpis['suspended_count']}件 | 退回: {kpis['returned_count']}件 | 撤单: {kpis['cancelled_count']}件
 状态分布: {status_str}
 服务组TOP5: {sg_str}
-近4周趋势: {weekly_str}
+近4周趋势: {weekly_str_with_avg}
+最近一周环比: {wow_change or '数据不足'}{wow_label}
 重复工单TOP3: {recurring_str or '无'}
 根因TOP3: {root_cause_str or '无'}
 高频请求人TOP3: {top_requester_str or '无'}
 组织广度: {dept_count}个部门 / {requester_count}个请求人
 运维质量: 退回率{ops['returned_ratio']}% / 挂起率{ops['suspended_ratio']}% / 撤单率{ops['cancelled_ratio']}%
-满意度: 服务态度{round(float(eval_data.get('attitude_avg', 0)), 1)}分 / 技术{round(float(eval_data.get('tech_avg', 0)), 1)}分 / 时效{round(float(eval_data.get('response_avg', 0)), 1)}分({eval_data.get('eval_count', 0)}条)"""
+满意度: 服务态度{round(float(eval_data.get('attitude_avg', 0)), 1)}分 / 技术{round(float(eval_data.get('tech_avg', 0)), 1)}分 / 时效{round(float(eval_data.get('response_avg', 0)), 1)}分({eval_data.get('eval_count', 0)}条)
+数据周期: {period_note}"""
 
         # 3. 调用 LLM 进行深度分析
         if not self.llm:
@@ -943,21 +982,39 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
 ## Profile
 你是一位拥有 15 年 ITIL 咨询经验的顶级数据分析大师。你精通统计学和趋势预测，能从工单数据中洞察企业 IT 架构的沉、人员效能瓶颈及潜在系统性风险。
 
+## 数据对标铁律（强制执行）
+1. **环比**：分析趋势时，必须引用数据中提供的环比变化率，明确说明"本周期 vs 上一周期"的变化。
+2. **基准线**：以近 4 周移动平均值为基准。偏离超过 20% 的指标必须在分析中明确指出为"异常"。
+3. **数据边界**：本分析仅基于 ITSM 工单数据。不涉及变更发布记录、告警历史、人员排班等外部数据。推导根因时，若需要外部数据验证，必须标注"此结论需补充 XX 数据验证"，不得凭空编造。
+4. **预测依据**：所有预测必须引用具体数据（环比变化率、移动平均值）。数据量少于 4 周时，必须声明"数据量有限，预测置信度较低"。
+
 ## Analysis Methodology (四阶段分析法)
 按以下结构输出深度洞察：
 
-1.  【现状扫描】：简明扼要总结当前数据核心特征。
+1. 📊 【现状扫描】：总结当前数据核心特征。**必须引用对比数据**：
+   - 当前值 vs 近 4 周移动平均值的偏离度
+   - 最近一周的环比变化率
+   - 明确指出哪些指标偏离基准线超过 20%
+
 2. 🔍 【根因推导】：结合多维度交叉数据，推导根本原因。穿透到"人员技能、变更发布、设备老化、流程缺陷"层面。
-3. 📈 【趋势与主观预测】：
-   - 给出你作为专家的**主观判断**和推高/推低预测。
-   - 识别潜在风险（如：SLA将崩溃、某类故障有爆发趋势）。
-4.  【行动建议】：提供至少3条具体的、可落地的管理或技术建议（避免空话，要具体到"建议对XX团队进行某模块培训"）。
+   - 仅限工单数据可支撑的推导
+   - 需要外部数据验证的结论，标注"⚠️ 需补充 XX 数据"
+
+3.  【趋势预测】：基于对比数据给出预测，**禁止无依据猜测**：
+   - 引用环比变化率和移动平均值作为预测依据
+   - 风险预测必须给出触发条件（如"若连续2周超过X件，则SLA可能降至Y%"）
+   - 数据量不足时声明置信度
+
+4. 💡 【行动建议】：至少3条具体可落地的建议：
+   - 每条建议必须关联到前面分析中的具体数据点
+   - 按影响程度排序
 
 ## Tone & Style
 - 语气：专业、严谨、敏锐、一针见血。
 - 视角：管理层视角与技术专家视角结合。
 - 善用 Markdown 标题、加粗、列表。
-- 用 [🔥 暴增预警]、[🕵️ 隐性根因]、[🎯 黄金建议] 等标签对洞察分类。
+- 用 [🔥 暴增预警]、[️ 隐性根因]、[🎯 黄金建议]、[⚠️ 风险警示] 等标签对洞察分类。
+- **所有结论必须有数据支撑，无数据支撑的推测必须明确标注。**
 
 {data_context}
 
@@ -1409,6 +1466,7 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
 
     async def _handle_chitchat(self, intent: dict) -> dict:
         user_message = intent.get('message', '')
+        filters = intent.get('filters', {})
         processor = self._resolve_processor(intent)
 
         if not self.llm:
@@ -1422,14 +1480,14 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
         data_context = ""
         if processor:
             try:
-                kpis = processor.get_summary_kpis()
-                status_dist = processor.get_status_distribution()
-                sg_dist = processor.get_service_group_distribution()
-                eval_data = processor.get_evaluation_summary()
-                recurring = processor.get_recurring_tickets()
-                ops = processor.get_ops_quality_metrics()
-                behavior = processor.get_requester_behavior()
-                root_cause = processor.get_fault_root_cause_analysis()
+                kpis = processor.get_summary_kpis(filters)
+                status_dist = processor.get_status_distribution(filters)
+                sg_dist = processor.get_service_group_distribution(filters)
+                eval_data = processor.get_evaluation_summary(filters)
+                recurring = processor.get_recurring_tickets(filters)
+                ops = processor.get_ops_quality_metrics(filters)
+                behavior = processor.get_requester_behavior(filters)
+                root_cause = processor.get_fault_root_cause_analysis(filters)
 
                 status_str = ', '.join([f"{l}:{v}件" for l, v in zip(status_dist['labels'][:5], status_dist['values'][:5])])
                 sg_str = ', '.join([f"{l}:{v}件" for l, v in zip(sg_dist['labels'][:5], sg_dist['values'][:5])])
@@ -1472,6 +1530,12 @@ SLA达标率: {kpis['sla_ratio']}%(均{kpis['sla_avg']}%) | 平均解决: {kpis[
 4. **TopN故障趋势** — 跟踪主要故障原因的时间走势
 5. **请求人行为与组织分析** — 分析哪些部门/人员提交最多、是否有异常行为模式
 6. **症状→解决方案聚类** — 为常见症状关联最佳解决方案
+
+## 数据上下文使用规则
+你接收到的数据上下文反映了**当前会话的筛选环境**（如特定时间范围、特定业务系统）。
+- 回答时必须引用数据上下文中的具体数字，不得凭空编造
+- 如果用户问的问题超出数据上下文范围（如问单张工单明细），回复："我可以帮您分析工单的整体趋势和分布，但无法查询单张工单的详细信息。您可以问我类似'工单状态分布'、'最近趋势如何'等问题。"
+- 如果数据上下文为空，说明当前没有可用数据源，引导用户上传数据
 
 {data_context}
 

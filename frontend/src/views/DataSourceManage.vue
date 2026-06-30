@@ -245,7 +245,7 @@ async function uploadFile(file) {
     const formData = new FormData()
     formData.append('file', file)
     const { data } = await apiClient.post('/datasources/upload/preview', formData, {
-      timeout: 60000,
+      timeout: 120000,
       onUploadProgress: (e) => {
         uploadProgress.value = Math.round(e.loaded / e.total * 80)
       },
